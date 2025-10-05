@@ -79,9 +79,12 @@ class HeatmiserThermostatCard extends HTMLElement {
 
   updateTimeValue(entity, value) {
     if (!this._hass) return;
+    if (value.length === 5) {
+      value += ':00';
+    }
     this._hass.callService('time', 'set_value', {
       entity_id: entity,
-      value: value
+      time: value
     });
   }
 
@@ -291,8 +294,8 @@ class HeatmiserThermostatCard extends HTMLElement {
             </div>
             <div class="actions">
               <button class="apply" id="${day}-apply">Apply</button>
-              <!--button class="apply" id="${day}-apply-group">Apply weekdays/weekend</button>
-              <button class="apply" id="${day}-apply-all">Apply all</button-->
+              <button class="apply" id="${day}-apply-group">Apply weekdays/weekend</button>
+              <button class="apply" id="${day}-apply-all">Apply all</button>
               <button class="cancel" id="${day}-cancel">Cancel</button>
             </div>
           </div>
