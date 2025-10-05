@@ -51,7 +51,8 @@ class HeatmiserThermostatCard extends HTMLElement {
   }
 
   set hass(hass) {
-    this._hass = hass; // Store the hass object for later use
+    console.log("Hass object updated at time "+new Date().toLocaleTimeString());
+    this._hassStates = hass.states; // Store the hass object for later use
     if (!this.content) {
       this.innerHTML = `
       <ha-card header="Heatmiser schedule">
@@ -59,34 +60,37 @@ class HeatmiserThermostatCard extends HTMLElement {
         </ha-card>
         `;
         this.content = this.querySelector(".card-content");
+        this.updateContent(this.content,true);
+        console.log("Completed initial load")
     }
-    this.updateContent(this.content);
+    else{
+      console.log("Starting data refresh at time "+new Date().toLocaleTimeString());
+      this.updateContent(this.content,false);
+    }
   }
 
-  updateContent(content) {
-    const entityId = this.config.entity;
-    const entityState = this._hass.states[entityId];
-    const temp = entityState ? entityState.attributes.temperature : 'N/A';
-    const state = entityState ? entityState.state : 'unavailable';
+  updateNumberValue(entity,value){
+    if (!this._hassStates) return;
+    this._hass.callService('number', 'set_value', {
+      entity_id: entity,
+      value: value
+    });
+  }
 
-    var numberEntityId = entityId.replace('climate.','number.');
-    numberEntityId = numberEntityId.replace('_thermostat','_1mon_period1_temp');
-    const numberEntityState = this._hass.states[numberEntityId];
+  experiments(){
+    // var numberEntityState = this._hassStates[numberEntityId];
 
-    // this._hass.states[numberEntityId].state = 23; // Try and update the state of the number entity
+    // this._hassStates[numberEntityId].state = 23; // Try and update the state of the number entity
     // var result = this._hass.callService('number', 'set_value', {
     //   entity_id: numberEntityId,
     //   value: 25
     // });
     
-    // console.log(this._hass.states[numberEntityId])
+    // console.log(this._hassStates[numberEntityId])
     // console.log(numberEntityState.state)
     
     // content.innerHTML = `The state of ${entityId} is ${state} at ${temp}!`
-    this.readScheduleFromDevice();
-    
-    
-    // this.updateHeader();
+        // this.updateHeader();
     // console.log(this._hass)
     // console.log(this.thermostatSchedule.monday[0])
     // console.log("Original monday temp is "+this.thermostatSchedule.monday[0].temp)
@@ -97,13 +101,30 @@ class HeatmiserThermostatCard extends HTMLElement {
     // console.log(numberEntityState)
 
     // console.log("Updated monday temp is "+this.thermostatSchedule.monday[0].temp)
+  }
 
+  updateContent(content,firstRender) {
+    var entityId = this.config.entity;
+    var entityState = this._hassStates[entityId];
+    var temp = entityState ? entityState.attributes.temperature : 'N/A';
+    var state = entityState ? entityState.state : 'unavailable';
 
-    this.render();
-    this.renderAll();
+    var numberEntityId = entityId.replace('climate.','number.');
+    numberEntityId = numberEntityId.replace('_thermostat','_1mon_period1_temp');
+
+    this.readScheduleFromDevice();
+
+    if (firstRender){
+      this.render();
+      this.renderAll();
+    }
+    else{
+      this.updateScheduleDisplay();
+    }
 
     content.querySelector('.entity-id').textContent = entityId;
     content.querySelector('.entity-state').textContent = `Current: ${temp}°C (${state})`;
+    content.querySelector('.last-update').textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
     // content.querySelector('.entity-mode').textContent = `Current: ${temp}°C (${state})`;
 
     //    
@@ -111,7 +132,7 @@ class HeatmiserThermostatCard extends HTMLElement {
 
   readScheduleFromDevice() {
     const entityId = this.config.entity;
-    if (!entityId || !this._hass) return;
+    if (!entityId || !this._hassStates) return;
 
     const baseTempEntityId = entityId.replace('climate.', 'number.').replace('_thermostat', '');
     const baseTimeEntityId = entityId.replace('climate.', 'time.').replace('_thermostat', '');
@@ -134,8 +155,8 @@ class HeatmiserThermostatCard extends HTMLElement {
         const timeEntityId = `${baseTimeEntityId}_${shortDay}_period${period}_starttime`;
 
         // Get states
-        const tempState = this._hass.states[tempEntityId];
-        const timeState = this._hass.states[timeEntityId];
+        const tempState = this._hassStates[tempEntityId];
+        const timeState = this._hassStates[timeEntityId];
 
         if (tempState && timeState) {
           // Convert time from minutes since midnight to HH:MM format
@@ -165,6 +186,7 @@ class HeatmiserThermostatCard extends HTMLElement {
   }
 
   setConfig(config) {
+    console.log("Setting config");
     // This method is called by Lovelace when the card is initialized
     if (!config.entity) {
       throw new Error("You need to define a climate entity");
@@ -186,7 +208,7 @@ class HeatmiserThermostatCard extends HTMLElement {
   }
 
   render() {
-    console.log("Starting render at time "+new Date().toISOString());
+    console.log("Starting render at time "+new Date().toLocaleTimeString());
     const style = `
       <style>
         .week-container { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial; padding: 12px; }
@@ -224,9 +246,17 @@ class HeatmiserThermostatCard extends HTMLElement {
     let htmlContent = `
       <div class="week-container">
         <div class="thermostat-header">
-          <div class="entity-info">
-            <div class="entity-id"></div>
-            <div class="entity-state">Loading...</div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <div class="entity-info">
+              <div class="entity-id"></div>
+              <div class="entity-state">Loading...</div>
+              <div class="last-update">Last updated: Never</div>
+            </div>
+            <button class="refresh-btn" style="padding: 8px 12px; border-radius: 4px; border: 1px solid #ccc; cursor: pointer;">
+              <svg style="width: 16px; height: 16px;" viewBox="0 0 24 24">
+                <path fill="currentColor" d="M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z"/>
+              </svg>
+            </button>
           </div>
         </div>
     `;
@@ -253,8 +283,8 @@ class HeatmiserThermostatCard extends HTMLElement {
             </div>
             <div class="actions">
               <button class="apply" id="${day}-apply">Apply</button>
-              <button class="apply" id="${day}-apply-group">Apply weekdays/weekend</button>
-              <button class="apply" id="${day}-apply-all">Apply all</button>
+              <!--button class="apply" id="${day}-apply-group">Apply weekdays/weekend</button>
+              <button class="apply" id="${day}-apply-all">Apply all</button-->
               <button class="cancel" id="${day}-cancel">Cancel</button>
             </div>
           </div>
@@ -267,6 +297,17 @@ class HeatmiserThermostatCard extends HTMLElement {
   }
 
   attachEventHandlers() {
+    console.log("Attaching event handlers");
+    
+    // Add refresh button handler
+    const refreshBtn = this.querySelector('.refresh-btn');
+    if(refreshBtn) {
+        refreshBtn.addEventListener('click', () => {
+            this.readScheduleFromDevice();
+            this.updateScheduleDisplay();
+        });
+    }
+    
     const dayOrder = this.dayOrder;
     dayOrder.forEach(day => {
       const row = this.querySelector(`.day-row[data-day="${day}"]`);
@@ -293,7 +334,7 @@ class HeatmiserThermostatCard extends HTMLElement {
       if(applyBtn) applyBtn.addEventListener('click', ()=>{
         this.thermostatSchedule[day] = collectFour(day);
         editor.classList.remove('visible');
-        this.renderAll();
+        this.updateScheduleDisplay();
       });
 
       if(applyGroupBtn) applyGroupBtn.addEventListener('click', ()=>{
@@ -302,14 +343,14 @@ class HeatmiserThermostatCard extends HTMLElement {
         const targets = isWeekend?['saturday','sunday']:['monday','tuesday','wednesday','thursday','friday'];
         targets.forEach(d=>this.thermostatSchedule[d]=[...newEntries]);
         editor.classList.remove('visible');
-        this.renderAll();
+        this.updateScheduleDisplay();
       });
 
       if(applyAllBtn) applyAllBtn.addEventListener('click', ()=>{
         const newEntries = collectFour(day);
         dayOrder.forEach(d=>this.thermostatSchedule[d]=[...newEntries]);
         editor.classList.remove('visible');
-        this.renderAll();
+        this.updateScheduleDisplay();
       });
 
       if(cancelBtn) cancelBtn.addEventListener('click', ()=>{ editor.classList.remove('visible'); });
@@ -327,6 +368,7 @@ class HeatmiserThermostatCard extends HTMLElement {
   }
 
   renderAll() {
+    console.log("Rendering all days at time "+new Date().toLocaleTimeString());
     this.dayOrder.forEach(day => this.renderDay(day));
   }
 
@@ -391,6 +433,91 @@ class HeatmiserThermostatCard extends HTMLElement {
       lbl.textContent=h;
       labels.appendChild(lbl);
     }
+  }
+
+  updateScheduleDisplay() {
+    console.log("Updating schedule display at " + new Date().toLocaleTimeString());
+    
+    this.dayOrder.forEach(day => {
+      const slots = this.thermostatSchedule[day];
+      const container = this.querySelector(`#${day}`);
+      
+      if (!container) return;
+
+      // Get all existing segments
+      const segments = container.querySelectorAll('.segment');
+      
+      // Get previous day's last temperature for the first segment
+      const dayIndex = this.dayOrder.indexOf(day);
+      const previousDay = this.dayOrder[(dayIndex - 1 + 7) % 7];
+      const previousDaySlots = this.thermostatSchedule[previousDay];
+      const previousDayLastTemp = previousDaySlots[previousDaySlots.length - 1].temp;
+
+      // Calculate first slot time
+      const firstSlotTime = slots.length > 0 ? this.parseTimeToMinutes(slots[0].time) : 0;
+
+      // Update or create segments
+      let currentSegments = Array.from(segments);
+      
+      // Update/create initial segment if needed
+      if (firstSlotTime > 0) {
+        if (currentSegments[0]) {
+          // Update existing initial segment
+          currentSegments[0].style.width = (firstSlotTime / 1440 * 100) + '%';
+          currentSegments[0].style.background = this.getColorForTemperature(previousDayLastTemp);
+          currentSegments[0].textContent = previousDayLastTemp + '°';
+        } else {
+          // Create new initial segment
+          const initialDiv = document.createElement('div');
+          initialDiv.className = 'segment';
+          initialDiv.style.width = (firstSlotTime / 1440 * 100) + '%';
+          initialDiv.style.background = this.getColorForTemperature(previousDayLastTemp);
+          initialDiv.textContent = previousDayLastTemp + '°';
+          container.appendChild(initialDiv);
+        }
+        currentSegments = currentSegments.slice(1);
+      }
+
+      // Update remaining segments
+      slots.forEach((slot, i) => {
+        const next = slots[i + 1] || { time: '24:00' };
+        const startMins = this.parseTimeToMinutes(slot.time);
+        const endMins = this.parseTimeToMinutes(next.time);
+        const widthPercent = ((endMins - startMins) / 1440) * 100;
+
+        if (currentSegments[i]) {
+          // Update existing segment
+          currentSegments[i].style.width = widthPercent + '%';
+          currentSegments[i].style.background = this.getColorForTemperature(slot.temp);
+          currentSegments[i].textContent = slot.temp + '°';
+        } else {
+          // Create new segment if needed
+          const div = document.createElement('div');
+          div.className = 'segment';
+          div.style.width = widthPercent + '%';
+          div.style.background = this.getColorForTemperature(slot.temp);
+          div.textContent = slot.temp + '°';
+          container.appendChild(div);
+        }
+      });
+
+      // Remove any excess segments
+      const totalSegmentsNeeded = slots.length + (firstSlotTime > 0 ? 1 : 0);
+      while (container.children.length > totalSegmentsNeeded) {
+        container.removeChild(container.lastChild);
+      }
+
+      // Update editor fields if visible
+      const editor = this.querySelector(`#${day}-editor`);
+      if (editor && editor.classList.contains('visible')) {
+        slots.forEach((slot, i) => {
+          const timeInput = this.querySelector(`#${day}-time-${i + 1}`);
+          const tempInput = this.querySelector(`#${day}-temp-${i + 1}`);
+          if (timeInput) timeInput.value = slot.time;
+          if (tempInput) tempInput.value = slot.temp;
+        });
+      }
+    });
   }
 }
 
