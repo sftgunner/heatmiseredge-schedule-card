@@ -194,6 +194,14 @@ class HeatmiserThermostatCard extends HTMLElement {
     return hh * 60 + mm;
   }
 
+  getScheduleMode() {
+    const entityId = this.config.entity;
+    const modeEntityId = entityId.replace('climate.', 'select.').replace('_thermostat', '_schedule_mode');
+    const modeState = this._hass?.states[modeEntityId];
+    console.log(`Schedule mode entity: ${modeEntityId}, state: ${modeState?.state}`);
+    return modeState?.state || 'Full Week';
+  }
+
   render() {
     console.log("Starting render at time "+new Date().toLocaleTimeString());
     const style = `
@@ -247,11 +255,20 @@ class HeatmiserThermostatCard extends HTMLElement {
           </div>
         </div>
     `;
-    this.dayOrder.forEach(day => {
+    const scheduleMode = this.getScheduleMode();
+    const visibleDays = scheduleMode === 'Weekday/Weekend' ? 
+      ['monday', 'saturday'] : 
+      this.dayOrder;
+
+    visibleDays.forEach(day => {
+      const displayName = scheduleMode === 'Weekday/Weekend' ?
+        (day === 'monday' ? 'Weekdays' : 'Weekends') :
+        day.charAt(0).toUpperCase() + day.slice(1);
+
       htmlContent += `
         <div class="day-row" data-day="${day}">
           <div class="day-header">
-            <div class="day-label">${day.charAt(0).toUpperCase()+day.slice(1)}</div>
+            <div class="day-label">${displayName}</div>
             <button class="edit-btn" data-edit="${day}">Edit</button>
           </div>
           <div class="progress-container" id="${day}"></div>
@@ -270,7 +287,9 @@ class HeatmiserThermostatCard extends HTMLElement {
             </div>
             <div class="actions">
               <button class="apply" id="${day}-apply">Apply</button>
+              ${scheduleMode !== 'Weekday/Weekend' ? `
               <button class="apply" id="${day}-apply-group">Apply weekdays/weekend</button>
+              ` : ''}
               <button class="apply" id="${day}-apply-all">Apply all</button>
               <button class="cancel" id="${day}-cancel">Cancel</button>
             </div>
@@ -550,7 +569,12 @@ class HeatmiserThermostatCard extends HTMLElement {
   updateScheduleDisplay() {
     console.log("Updating schedule display at " + new Date().toLocaleTimeString());
     
-    this.dayOrder.forEach(day => {
+    const scheduleMode = this.getScheduleMode();
+    const visibleDays = scheduleMode === 'Weekday/Weekend' ? 
+      ['monday', 'saturday'] : 
+      this.dayOrder;
+    
+    visibleDays.forEach(day => {
       const slots = this.thermostatSchedule[day];
       const container = this.querySelector(`#${day}`);
       
