@@ -71,6 +71,7 @@ class HeatmiserThermostatCard extends HTMLElement {
 
   updateNumberValue(entity,value){
     if (!this._hass) return;
+    console.log(`Updating ${entity} to ${value}`);
     this._hass.callService('number', 'set_value', {
       entity_id: entity,
       value: value
@@ -79,6 +80,7 @@ class HeatmiserThermostatCard extends HTMLElement {
 
   updateTimeValue(entity, value) {
     if (!this._hass) return;
+    console.log(`Updating ${entity} to ${value}`);
     if (value.length === 5) {
       value += ':00';
     }
@@ -370,19 +372,97 @@ class HeatmiserThermostatCard extends HTMLElement {
       });
 
       if(applyGroupBtn) applyGroupBtn.addEventListener('click', ()=>{
-        const newEntries = collectFour(day);
-        const isWeekend = day==='saturday'||day==='sunday';
-        const targets = isWeekend?['saturday','sunday']:['monday','tuesday','wednesday','thursday','friday'];
-        targets.forEach(d=>this.thermostatSchedule[d]=[...newEntries]);
+        console.log(`Applying group changes from ${day}`);
+        const entityId = this.config.entity;
+        const baseTempEntityId = entityId.replace('climate.', 'number.').replace('_thermostat', '');
+        const baseTimeEntityId = entityId.replace('climate.', 'time.').replace('_thermostat', '');
+        
+        const dayMap = {
+          'monday': '1mon', 'tuesday': '2tue', 'wednesday': '3wed',
+          'thursday': '4thu', 'friday': '5fri', 'saturday': '6sat', 'sunday': '7sun'
+        };
+
+        // Determine target days
+        const isWeekend = day === 'saturday' || day === 'sunday';
+        const targetDays = isWeekend ? 
+          ['saturday', 'sunday'] : 
+          ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+
+        // Collect values from source day
+        const newValues = [];
+        for(let i=1; i<=4; i++) {
+          const timeInput = this.querySelector(`#${day}-time-${i}`);
+          const tempInput = this.querySelector(`#${day}-temp-${i}`);
+          if(timeInput?.value && tempInput?.value) {
+            newValues.push({
+              period: i,
+              time: timeInput.value,
+              temp: parseFloat(tempInput.value)
+            });
+          }
+        }
+
+        // Sort by time
+        newValues.sort((a,b) => this.parseTimeToMinutes(a.time) - this.parseTimeToMinutes(b.time));
+
+        // Update entities for each target day
+        targetDays.forEach(targetDay => {
+          console.log(`Updating entities for ${targetDay}`);
+          const shortDay = dayMap[targetDay];
+          newValues.forEach((value, index) => {
+            const tempEntityId = `${baseTempEntityId}_${shortDay}_period${value.period}_temp`;
+            const timeEntityId = `${baseTimeEntityId}_${shortDay}_period${value.period}_starttime`;
+            
+            this.updateNumberValue(tempEntityId, value.temp);
+            this.updateTimeValue(timeEntityId, value.time);
+          });
+        });
+
         editor.classList.remove('visible');
-        this.updateScheduleDisplay();
       });
 
       if(applyAllBtn) applyAllBtn.addEventListener('click', ()=>{
-        const newEntries = collectFour(day);
-        dayOrder.forEach(d=>this.thermostatSchedule[d]=[...newEntries]);
+        console.log(`Applying changes from ${day} to all days`);
+        const entityId = this.config.entity;
+        const baseTempEntityId = entityId.replace('climate.', 'number.').replace('_thermostat', '');
+        const baseTimeEntityId = entityId.replace('climate.', 'time.').replace('_thermostat', '');
+        
+        const dayMap = {
+          'monday': '1mon', 'tuesday': '2tue', 'wednesday': '3wed',
+          'thursday': '4thu', 'friday': '5fri', 'saturday': '6sat', 'sunday': '7sun'
+        };
+
+        // Collect values from source day
+        const newValues = [];
+        for(let i=1; i<=4; i++) {
+          const timeInput = this.querySelector(`#${day}-time-${i}`);
+          const tempInput = this.querySelector(`#${day}-temp-${i}`);
+          if(timeInput?.value && tempInput?.value) {
+            newValues.push({
+              period: i,
+              time: timeInput.value,
+              temp: parseFloat(tempInput.value)
+            });
+          }
+        }
+
+        // Sort by time
+        newValues.sort((a,b) => this.parseTimeToMinutes(a.time) - this.parseTimeToMinutes(b.time));
+
+        // Update entities for all days
+        this.dayOrder.forEach(targetDay => {
+          console.log(`Updating entities for ${targetDay}`);
+          const shortDay = dayMap[targetDay];
+          newValues.forEach((value, index) => {
+            const tempEntityId = `${baseTempEntityId}_${shortDay}_period${value.period}_temp`;
+            const timeEntityId = `${baseTimeEntityId}_${shortDay}_period${value.period}_starttime`;
+            
+            this.updateNumberValue(tempEntityId, value.temp);
+            this.updateTimeValue(timeEntityId, value.time);
+          });
+        });
+
         editor.classList.remove('visible');
-        this.updateScheduleDisplay();
       });
 
       if(cancelBtn) cancelBtn.addEventListener('click', ()=>{ editor.classList.remove('visible'); });
