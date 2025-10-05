@@ -52,7 +52,7 @@ class HeatmiserThermostatCard extends HTMLElement {
 
   set hass(hass) {
     console.log("Hass object updated at time "+new Date().toLocaleTimeString());
-    this._hassStates = hass.states; // Store the hass object for later use
+    this._hass = hass; // Store the hass object for later use
     if (!this.content) {
       this.innerHTML = `
       <ha-card header="Heatmiser schedule">
@@ -70,23 +70,31 @@ class HeatmiserThermostatCard extends HTMLElement {
   }
 
   updateNumberValue(entity,value){
-    if (!this._hassStates) return;
+    if (!this._hass) return;
     this._hass.callService('number', 'set_value', {
       entity_id: entity,
       value: value
     });
   }
 
-  experiments(){
-    // var numberEntityState = this._hassStates[numberEntityId];
+  updateTimeValue(entity, value) {
+    if (!this._hass) return;
+    this._hass.callService('time', 'set_value', {
+      entity_id: entity,
+      value: value
+    });
+  }
 
-    // this._hassStates[numberEntityId].state = 23; // Try and update the state of the number entity
+  experiments(){
+    // var numberEntityState = this._hass.states[numberEntityId];
+
+    // this._hass.states[numberEntityId].state = 23; // Try and update the state of the number entity
     // var result = this._hass.callService('number', 'set_value', {
     //   entity_id: numberEntityId,
     //   value: 25
     // });
     
-    // console.log(this._hassStates[numberEntityId])
+    // console.log(this._hass.states[numberEntityId])
     // console.log(numberEntityState.state)
     
     // content.innerHTML = `The state of ${entityId} is ${state} at ${temp}!`
@@ -105,7 +113,7 @@ class HeatmiserThermostatCard extends HTMLElement {
 
   updateContent(content,firstRender) {
     var entityId = this.config.entity;
-    var entityState = this._hassStates[entityId];
+    var entityState = this._hass.states[entityId];
     var temp = entityState ? entityState.attributes.temperature : 'N/A';
     var state = entityState ? entityState.state : 'unavailable';
 
@@ -132,7 +140,7 @@ class HeatmiserThermostatCard extends HTMLElement {
 
   readScheduleFromDevice() {
     const entityId = this.config.entity;
-    if (!entityId || !this._hassStates) return;
+    if (!entityId || !this._hass) return;
 
     const baseTempEntityId = entityId.replace('climate.', 'number.').replace('_thermostat', '');
     const baseTimeEntityId = entityId.replace('climate.', 'time.').replace('_thermostat', '');
@@ -155,8 +163,8 @@ class HeatmiserThermostatCard extends HTMLElement {
         const timeEntityId = `${baseTimeEntityId}_${shortDay}_period${period}_starttime`;
 
         // Get states
-        const tempState = this._hassStates[tempEntityId];
-        const timeState = this._hassStates[timeEntityId];
+        const tempState = this._hass.states[tempEntityId];
+        const timeState = this._hass.states[timeEntityId];
 
         if (tempState && timeState) {
           // Convert time from minutes since midnight to HH:MM format
@@ -332,7 +340,54 @@ class HeatmiserThermostatCard extends HTMLElement {
       }
 
       if(applyBtn) applyBtn.addEventListener('click', ()=>{
-        this.thermostatSchedule[day] = collectFour(day);
+        // Get the base entity IDs
+        const entityId = this.config.entity;
+        const baseTempEntityId = entityId.replace('climate.', 'number.').replace('_thermostat', '');
+        const baseTimeEntityId = entityId.replace('climate.', 'time.').replace('_thermostat', '');
+        
+        // Map full day names to short day format
+        const dayMap = {
+          'monday': '1mon',
+          'tuesday': '2tue', 
+          'wednesday': '3wed',
+          'thursday': '4thu',
+          'friday': '5fri',
+          'saturday': '6sat',
+          'sunday': '7sun'
+        };
+
+        // Get the short day code
+        const shortDay = dayMap[day];
+
+        // Collect new values
+        const newValues = [];
+        for(let i=1; i<=4; i++) {
+          const timeInput = this.querySelector(`#${day}-time-${i}`);
+          const tempInput = this.querySelector(`#${day}-temp-${i}`);
+          if(timeInput && tempInput && timeInput.value && tempInput.value) {
+            newValues.push({
+              period: i,
+              time: timeInput.value,
+              temp: parseFloat(tempInput.value)
+            });
+          }
+        }
+
+        // Sort by time
+        newValues.sort((a,b) => this.parseTimeToMinutes(a.time) - this.parseTimeToMinutes(b.time));
+
+        // Update Home Assistant entities
+        newValues.forEach((value, index) => {
+          // Update temperature entity
+          const tempEntityId = `${baseTempEntityId}_${shortDay}_period${value.period}_temp`;
+          this.updateNumberValue(tempEntityId, value.temp);
+
+          // Update time entity
+          const timeEntityId = `${baseTimeEntityId}_${shortDay}_period${value.period}_starttime`;
+          this.updateTimeValue(timeEntityId, value.time);
+        });
+
+        // Close editor and update display
         editor.classList.remove('visible');
         this.updateScheduleDisplay();
       });
