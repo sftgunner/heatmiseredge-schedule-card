@@ -88,32 +88,6 @@ class HeatmiserThermostatCard extends HTMLElement {
     });
   }
 
-  experiments(){
-    // var numberEntityState = this._hass.states[numberEntityId];
-
-    // this._hass.states[numberEntityId].state = 23; // Try and update the state of the number entity
-    // var result = this._hass.callService('number', 'set_value', {
-    //   entity_id: numberEntityId,
-    //   value: 25
-    // });
-    
-    // console.log(this._hass.states[numberEntityId])
-    // console.log(numberEntityState.state)
-    
-    // content.innerHTML = `The state of ${entityId} is ${state} at ${temp}!`
-        // this.updateHeader();
-    // console.log(this._hass)
-    // console.log(this.thermostatSchedule.monday[0])
-    // console.log("Original monday temp is "+this.thermostatSchedule.monday[0].temp)
-
-    // this.thermostatSchedule.monday[0].temp = numberEntityState.state;
-
-    // console.log("Actual monday temp is "+numberEntityState.state)
-    // console.log(numberEntityState)
-
-    // console.log("Updated monday temp is "+this.thermostatSchedule.monday[0].temp)
-  }
-
   updateContent(content,firstRender) {
     var entityId = this.config.entity;
     var entityState = this._hass.states[entityId];
