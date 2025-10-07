@@ -331,12 +331,23 @@ class HeatmiserThermostatCard extends HTMLElement {
               </div>`).join('')}
             </div>
             <div class="actions">
-              <button class="apply" id="${day}-apply">Apply</button>
-              ${scheduleMode !== 'Weekday/Weekend' ? `
-              <button class="apply" id="${day}-apply-group">Apply weekdays/weekend</button>
-              ` : ''}
-              <button class="apply" id="${day}-apply-all">Apply all</button>
-              <button class="cancel" id="${day}-cancel">Cancel</button>
+              ${scheduleMode === '24 Hour' ? `
+                <button class="apply" id="${day}-apply-all">Apply all</button>
+                <button class="cancel" id="${day}-cancel">Cancel</button>
+              ` : scheduleMode === 'Weekday/Weekend' ? `
+                <button class="apply" id="${day}-apply-group">Apply ${
+                  ['saturday', 'sunday'].includes(day) ? 'weekends' : 'weekdays'
+                }</button>
+                <button class="apply" id="${day}-apply-all">Apply all</button>
+                <button class="cancel" id="${day}-cancel">Cancel</button>
+              ` : `
+                <button class="apply" id="${day}-apply">Apply</button>
+                <button class="apply" id="${day}-apply-group">Apply ${
+                  ['saturday', 'sunday'].includes(day) ? 'weekends' : 'weekdays'
+                }</button>
+                <button class="apply" id="${day}-apply-all">Apply all</button>
+                <button class="cancel" id="${day}-cancel">Cancel</button>
+              `}
             </div>
           </div>
         </div>`;
@@ -359,34 +370,68 @@ class HeatmiserThermostatCard extends HTMLElement {
         });
     }
     
-    const dayOrder = this.dayOrder;
-    dayOrder.forEach(day => {
-      const row = this.querySelector(`.day-row[data-day="${day}"]`);
-      const editor = this.querySelector(`#${day}-editor`);
-      const editBtn = this.querySelector(`.edit-btn[data-edit="${day}"]`);
-      const applyBtn = this.querySelector(`#${day}-apply`);
-      const applyGroupBtn = this.querySelector(`#${day}-apply-group`);
-      const applyAllBtn = this.querySelector(`#${day}-apply-all`);
-      const cancelBtn = this.querySelector(`#${day}-cancel`);
+    const scheduleMode = this.getScheduleMode();
+    const visibleDays = scheduleMode === 'Weekday/Weekend' ? 
+        ['monday', 'saturday'] : 
+        this.dayOrder;
 
-      if(editBtn) editBtn.addEventListener('click', ()=>{ editor.classList.toggle('visible'); this.prefillEditor(day); });
-      if(row) row.addEventListener('click', e=>{ if(!e.target.closest('button') && !e.target.closest('input')) editor.classList.toggle('visible'); this.prefillEditor(day); });
+    visibleDays.forEach(day => {
+        const row = this.querySelector(`.day-row[data-day="${day}"]`);
+        const editor = this.querySelector(`#${day}-editor`);
+        const editBtn = this.querySelector(`.edit-btn[data-edit="${day}"]`);
+        const applyBtn = this.querySelector(`#${day}-apply`);
+        const applyGroupBtn = this.querySelector(`#${day}-apply-group`);
+        const applyAllBtn = this.querySelector(`#${day}-apply-all`);
+        const cancelBtn = this.querySelector(`#${day}-cancel`);
 
-      const collectFour = (d) => {
-        const entries = [];
-        for(let i=1;i<=4;i++){
-          const t = this.querySelector(`#${d}-time-${i}`).value;
-          const val = parseFloat(this.querySelector(`#${d}-temp-${i}`).value);
-          if(t && !isNaN(val)) entries.push({time:t,temp:val});
+        // Basic editor toggle handlers
+        if(editBtn) {
+            editBtn.addEventListener('click', () => {
+                editor.classList.toggle('visible');
+                this.prefillEditor(day);
+            });
         }
-        return entries.sort((a,b)=>this.parseTimeToMinutes(a.time)-this.parseTimeToMinutes(b.time));
-      }
 
-      if(applyBtn) applyBtn.addEventListener('click', () => this.applySchedule(day, 'single'));
-      if(applyGroupBtn) applyGroupBtn.addEventListener('click', () => this.applySchedule(day, 'group'));
-      if(applyAllBtn) applyAllBtn.addEventListener('click', () => this.applySchedule(day, 'all'));
-      
-      if(cancelBtn) cancelBtn.addEventListener('click', ()=>{ editor.classList.remove('visible'); });
+        if(row) {
+            row.addEventListener('click', e => {
+                if(!e.target.closest('button') && !e.target.closest('input')) {
+                    editor.classList.toggle('visible');
+                    this.prefillEditor(day);
+                }
+            });
+        }
+
+        // Apply button handlers based on schedule mode
+        if (scheduleMode === '24 Hour') {
+            if(applyAllBtn) {
+                applyAllBtn.addEventListener('click', () => this.applySchedule(day, 'all'));
+            }
+        } else if (scheduleMode === 'Weekday/Weekend') {
+            if(applyGroupBtn) {
+                applyGroupBtn.addEventListener('click', () => this.applySchedule(day, 'group'));
+            }
+            if(applyAllBtn) {
+                applyAllBtn.addEventListener('click', () => this.applySchedule(day, 'all'));
+            }
+        } else {
+            // 7 Day mode
+            if(applyBtn) {
+                applyBtn.addEventListener('click', () => this.applySchedule(day, 'single'));
+            }
+            if(applyGroupBtn) {
+                applyGroupBtn.addEventListener('click', () => this.applySchedule(day, 'group'));
+            }
+            if(applyAllBtn) {
+                applyAllBtn.addEventListener('click', () => this.applySchedule(day, 'all'));
+            }
+        }
+
+        // Cancel button handler
+        if(cancelBtn) {
+            cancelBtn.addEventListener('click', () => {
+                editor.classList.remove('visible');
+            });
+        }
     });
   }
   
