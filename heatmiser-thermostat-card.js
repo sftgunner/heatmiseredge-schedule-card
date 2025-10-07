@@ -47,6 +47,11 @@ class HeatmiserThermostatCard extends HTMLElement {
         { time: '21:30', temp: 0 }
       ]
     };
+    // Default period values (24:00, 0min, 16degC, 0)
+    this.defaultPeriodValues = [24, 0, 160, 0];
+    
+    // Initialize thermostatScheduleRegister with default values
+    this.thermostatScheduleRegister = new Array(7 * 6 * 4).fill(0);
     this.dayOrder = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
   }
 
@@ -88,6 +93,44 @@ class HeatmiserThermostatCard extends HTMLElement {
       entity_id: entity,
       time: value
     });
+  }
+
+  convertScheduleToRegister() {
+    // Day order for register format (Sunday first)
+    const registerDayOrder = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    
+    registerDayOrder.forEach((day, dayIndex) => {
+      const daySchedule = this.thermostatSchedule[day] || [];
+      const baseIndex = dayIndex * 24; // 24 values per day (6 periods × 4 values)
+      
+      // Process up to 6 periods
+      for (let period = 0; period < 6; period++) {
+        const startIdx = baseIndex + (period * 4);
+        
+        if (period < daySchedule.length) {
+          // Valid schedule entry exists
+          const slot = daySchedule[period];
+          const [hours, minutes] = slot.time.split(':').map(Number);
+          const tempValue = Math.round(slot.temp * 10); // Convert temperature to register format
+          
+          // Update register values for this period
+          this.thermostatScheduleRegister[startIdx] = hours;
+          this.thermostatScheduleRegister[startIdx + 1] = minutes;
+          this.thermostatScheduleRegister[startIdx + 2] = tempValue;
+          this.thermostatScheduleRegister[startIdx + 3] = 0; // Reserved value
+        } else {
+          // Use default values for unused periods
+          this.thermostatScheduleRegister[startIdx] = this.defaultPeriodValues[0];     // Hour = 24
+          this.thermostatScheduleRegister[startIdx + 1] = this.defaultPeriodValues[1]; // Minute = 0
+          this.thermostatScheduleRegister[startIdx + 2] = this.defaultPeriodValues[2]; // Temp = 160 (16.0°C)
+          this.thermostatScheduleRegister[startIdx + 3] = this.defaultPeriodValues[3]; // Reserved = 0
+        }
+      }
+    });
+    
+    // console.log('Converted register values:', this.thermostatScheduleRegister);
+    console.log(this.thermostatScheduleRegister);
+    return this.thermostatScheduleRegister;
   }
 
   updateContent(content,firstRender) {
@@ -162,6 +205,7 @@ class HeatmiserThermostatCard extends HTMLElement {
         }
       }
     }
+    this.convertScheduleToRegister(); // Update register representation at the same time
     console.log(this.thermostatSchedule)
 
     // // Sort each day's schedule by time
