@@ -53,6 +53,7 @@ class HeatmiserThermostatCard extends HTMLElement {
     // Initialize thermostatScheduleRegister with default values
     this.thermostatScheduleRegister = new Array(7 * 6 * 4).fill(0);
     this.dayOrder = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
+    this.dayRegisterStartingByte = [74, 98, 122, 146, 170, 194, 50]; // Starting byte for each day in the register map
   }
 
   set hass(hass) {
@@ -382,150 +383,132 @@ class HeatmiserThermostatCard extends HTMLElement {
       }
 
       if(applyBtn) applyBtn.addEventListener('click', ()=>{
-        // Get the base entity IDs
-        const entityId = this.config.entity;
-        const baseTempEntityId = entityId.replace('climate.', 'number.').replace('_thermostat', '');
-        const baseTimeEntityId = entityId.replace('climate.', 'time.').replace('_thermostat', '');
+        // Get starting register for this day
+        const dayIndex = this.dayOrder.indexOf(day);
+        const startRegister = this.dayRegisterStartingByte[dayIndex];
         
-        // Map full day names to short day format
-        const dayMap = {
-          'monday': '1mon',
-          'tuesday': '2tue', 
-          'wednesday': '3wed',
-          'thursday': '4thu',
-          'friday': '5fri',
-          'saturday': '6sat',
-          'sunday': '7sun'
-        };
-
-        // Get the short day code
-        const shortDay = dayMap[day];
-
-        // Collect new values
-        const newValues = [];
+        // Collect values and convert to register format
+        const registerValues = [];
+        
+        // Get all periods (up to 4)
         for(let i=1; i<=4; i++) {
-          const timeInput = this.querySelector(`#${day}-time-${i}`);
-          const tempInput = this.querySelector(`#${day}-temp-${i}`);
-          if(timeInput && tempInput && timeInput.value && tempInput.value) {
-            newValues.push({
-              period: i,
-              time: timeInput.value,
-              temp: parseFloat(tempInput.value)
-            });
-          }
+            // For periods 1-4, get values from inputs
+            const timeInput = this.querySelector(`#${day}-time-${i}`);
+            const tempInput = this.querySelector(`#${day}-temp-${i}`);
+            
+            if(timeInput?.value && tempInput?.value) {
+              // Convert time to hours and minutes
+              const [hours, minutes] = timeInput.value.split(':').map(Number);
+              // Convert temperature (multiply by 10 to get register format)
+              const temp = Math.round(parseFloat(tempInput.value) * 10);
+              
+              // Add the four values for this period
+              registerValues.push(hours);        // Hour (0-24)
+              registerValues.push(minutes);      // Minute (0-59)
+              registerValues.push(temp);         // Temperature * 10
+              registerValues.push(0);            // Reserved value
+            }
         }
-
-        // Sort by time
-        newValues.sort((a,b) => this.parseTimeToMinutes(a.time) - this.parseTimeToMinutes(b.time));
-
-        // Update Home Assistant entities
-        newValues.forEach((value, index) => {
-          // Update temperature entity
-          const tempEntityId = `${baseTempEntityId}_${shortDay}_period${value.period}_temp`;
-          this.updateNumberValue(tempEntityId, value.temp);
-
-          // Update time entity
-          const timeEntityId = `${baseTimeEntityId}_${shortDay}_period${value.period}_starttime`;
-          this.updateTimeValue(timeEntityId, value.time);
+        
+        // Call the service
+        this._hass.callService('heatmiser_edge', 'write_register_range', {
+          device_id: ['4e03fdc94f493c4af45a120ad23013e5'],
+          register: startRegister,
+          values: registerValues.join(','),
+          refresh_values_after_writing: true
         });
 
         // Close editor and update display
         editor.classList.remove('visible');
-        this.updateScheduleDisplay();
+        
+        // Wait a moment for the write to complete before refreshing
+        setTimeout(() => {
+          this.readScheduleFromDevice();
+          this.updateScheduleDisplay();
+        }, 2000);
       });
 
-      if(applyGroupBtn) applyGroupBtn.addEventListener('click', ()=>{
-        console.log(`Applying group changes from ${day}`);
-        const entityId = this.config.entity;
-        const baseTempEntityId = entityId.replace('climate.', 'number.').replace('_thermostat', '');
-        const baseTimeEntityId = entityId.replace('climate.', 'time.').replace('_thermostat', '');
-        
-        const dayMap = {
-          'monday': '1mon', 'tuesday': '2tue', 'wednesday': '3wed',
-          'thursday': '4thu', 'friday': '5fri', 'saturday': '6sat', 'sunday': '7sun'
-        };
-
-        // Determine target days
+      if(applyGroupBtn) applyGroupBtn.addEventListener('click', async ()=>{
         const isWeekend = day === 'saturday' || day === 'sunday';
-        const targetDays = isWeekend ? 
-          ['saturday', 'sunday'] : 
-          ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
-
-        // Collect values from source day
-        const newValues = [];
-        for(let i=1; i<=4; i++) {
-          const timeInput = this.querySelector(`#${day}-time-${i}`);
-          const tempInput = this.querySelector(`#${day}-temp-${i}`);
-          if(timeInput?.value && tempInput?.value) {
-            newValues.push({
-              period: i,
-              time: timeInput.value,
-              temp: parseFloat(tempInput.value)
-            });
+        const registerValues = [];
+        
+        // Get values from the form
+        for(let i=1; i<=6; i++) {
+          if(i <= 4) {
+            const timeInput = this.querySelector(`#${day}-time-${i}`);
+            const tempInput = this.querySelector(`#${day}-temp-${i}`);
+            
+            if(timeInput?.value && tempInput?.value) {
+              const [hours, minutes] = timeInput.value.split(':').map(Number);
+              const temp = Math.round(parseFloat(tempInput.value) * 10);
+              registerValues.push(hours, minutes, temp, 0);
+            }
+          } else {
+            // Add default values for periods 5-6
+            registerValues.push(24, 0, 160, 0);
           }
         }
 
-        // Sort by time
-        newValues.sort((a,b) => this.parseTimeToMinutes(a.time) - this.parseTimeToMinutes(b.time));
-
-        // Update entities for each target day
-        targetDays.forEach(targetDay => {
-          console.log(`Updating entities for ${targetDay}`);
-          const shortDay = dayMap[targetDay];
-          newValues.forEach((value, index) => {
-            const tempEntityId = `${baseTempEntityId}_${shortDay}_period${value.period}_temp`;
-            const timeEntityId = `${baseTimeEntityId}_${shortDay}_period${value.period}_starttime`;
-            
-            this.updateNumberValue(tempEntityId, value.temp);
-            this.updateTimeValue(timeEntityId, value.time);
-          });
-        });
+        if(isWeekend) {
+          // Write to Saturday and Sunday separately
+          await this.writeRegisters(this.dayRegisterStartingByte[5], registerValues); // Saturday
+          await this.writeRegisters(this.dayRegisterStartingByte[6], registerValues); // Sunday
+        } else {
+          // Concatenate values for all weekdays
+          const weekdayValues = Array(5).fill(registerValues).flat();
+          // Write to Monday-Friday in one call (registers 74-193)
+          await this.writeRegisters(this.dayRegisterStartingByte[0], weekdayValues);
+        }
 
         editor.classList.remove('visible');
+        
+        // Wait for writes to complete before refreshing
+        setTimeout(() => {
+          this.readScheduleFromDevice();
+          this.updateScheduleDisplay();
+        }, 2000);
       });
 
-      if(applyAllBtn) applyAllBtn.addEventListener('click', ()=>{
-        console.log(`Applying changes from ${day} to all days`);
-        const entityId = this.config.entity;
-        const baseTempEntityId = entityId.replace('climate.', 'number.').replace('_thermostat', '');
-        const baseTimeEntityId = entityId.replace('climate.', 'time.').replace('_thermostat', '');
+      if(applyAllBtn) applyAllBtn.addEventListener('click', async ()=>{
+        const registerValues = [];
         
-        const dayMap = {
-          'monday': '1mon', 'tuesday': '2tue', 'wednesday': '3wed',
-          'thursday': '4thu', 'friday': '5fri', 'saturday': '6sat', 'sunday': '7sun'
-        };
-
-        // Collect values from source day
-        const newValues = [];
-        for(let i=1; i<=4; i++) {
-          const timeInput = this.querySelector(`#${day}-time-${i}`);
-          const tempInput = this.querySelector(`#${day}-temp-${i}`);
-          if(timeInput?.value && tempInput?.value) {
-            newValues.push({
-              period: i,
-              time: timeInput.value,
-              temp: parseFloat(tempInput.value)
-            });
+        // Get values from the form
+        for(let i=1; i<=6; i++) {
+          if(i <= 4) {
+            const timeInput = this.querySelector(`#${day}-time-${i}`);
+            const tempInput = this.querySelector(`#${day}-temp-${i}`);
+            
+            if(timeInput?.value && tempInput?.value) {
+              const [hours, minutes] = timeInput.value.split(':').map(Number);
+              const temp = Math.round(parseFloat(tempInput.value) * 10);
+              registerValues.push(hours, minutes, temp, 0);
+            }
+          } else {
+            // Add default values for periods 5-6
+            registerValues.push(24, 0, 160, 0);
           }
         }
 
-        // Sort by time
-        newValues.sort((a,b) => this.parseTimeToMinutes(a.time) - this.parseTimeToMinutes(b.time));
-
-        // Update entities for all days
-        this.dayOrder.forEach(targetDay => {
-          console.log(`Updating entities for ${targetDay}`);
-          const shortDay = dayMap[targetDay];
-          newValues.forEach((value, index) => {
-            const tempEntityId = `${baseTempEntityId}_${shortDay}_period${value.period}_temp`;
-            const timeEntityId = `${baseTimeEntityId}_${shortDay}_period${value.period}_starttime`;
-            
-            this.updateNumberValue(tempEntityId, value.temp);
-            this.updateTimeValue(timeEntityId, value.time);
-          });
-        });
+        // Create combined register values for all days (Sunday first)
+        const allDaysValues = [];
+        
+        // Start with Sunday (register 50)
+        allDaysValues.push(...registerValues);
+        
+        // Then Monday through Saturday (registers 74-217)
+        const weekdayValues = Array(6).fill(registerValues).flat();
+        allDaysValues.push(...weekdayValues);
+        
+        // Write all values starting from Sunday's register (50)
+        await this.writeRegisters(50, allDaysValues);
 
         editor.classList.remove('visible');
+        
+        // Wait for write to complete before refreshing
+        setTimeout(() => {
+          this.readScheduleFromDevice();
+          this.updateScheduleDisplay();
+        }, 2000);
       });
 
       if(cancelBtn) cancelBtn.addEventListener('click', ()=>{ editor.classList.remove('visible'); });
@@ -697,6 +680,16 @@ class HeatmiserThermostatCard extends HTMLElement {
           if (tempInput) tempInput.value = slot.temp;
         });
       }
+    });
+  }
+
+  // Add this helper function after the constructor
+  async writeRegisters(registerStart, values) {
+    await this._hass.callService('heatmiser_edge', 'write_register_range', {
+      device_id: ['4e03fdc94f493c4af45a120ad23013e5'],
+      register: registerStart,
+      values: values.join(','),
+      refresh_values_after_writing: true
     });
   }
 }
