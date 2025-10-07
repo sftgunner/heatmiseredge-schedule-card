@@ -382,137 +382,85 @@ class HeatmiserThermostatCard extends HTMLElement {
         return entries.sort((a,b)=>this.parseTimeToMinutes(a.time)-this.parseTimeToMinutes(b.time));
       }
 
-      if(applyBtn) applyBtn.addEventListener('click', ()=>{
-        // Get starting register for this day
-        const dayIndex = this.dayOrder.indexOf(day);
-        const startRegister = this.dayRegisterStartingByte[dayIndex];
-        
-        // Collect values and convert to register format
-        const registerValues = [];
-        
-        // Get all periods (up to 4)
-        for(let i=1; i<=4; i++) {
-            // For periods 1-4, get values from inputs
-            const timeInput = this.querySelector(`#${day}-time-${i}`);
-            const tempInput = this.querySelector(`#${day}-temp-${i}`);
-            
-            if(timeInput?.value && tempInput?.value) {
-              // Convert time to hours and minutes
-              const [hours, minutes] = timeInput.value.split(':').map(Number);
-              // Convert temperature (multiply by 10 to get register format)
-              const temp = Math.round(parseFloat(tempInput.value) * 10);
-              
-              // Add the four values for this period
-              registerValues.push(hours);        // Hour (0-24)
-              registerValues.push(minutes);      // Minute (0-59)
-              registerValues.push(temp);         // Temperature * 10
-              registerValues.push(0);            // Reserved value
-            }
-        }
-        
-        // Call the service
-        this._hass.callService('heatmiser_edge', 'write_register_range', {
-          device_id: ['4e03fdc94f493c4af45a120ad23013e5'],
-          register: startRegister,
-          values: registerValues.join(','),
-          refresh_values_after_writing: true
-        });
-
-        // Close editor and update display
-        editor.classList.remove('visible');
-        
-        // Wait a moment for the write to complete before refreshing
-        setTimeout(() => {
-          this.readScheduleFromDevice();
-          this.updateScheduleDisplay();
-        }, 2000);
-      });
-
-      if(applyGroupBtn) applyGroupBtn.addEventListener('click', async ()=>{
-        const isWeekend = day === 'saturday' || day === 'sunday';
-        const registerValues = [];
-        
-        // Get values from the form
-        for(let i=1; i<=6; i++) {
-          if(i <= 4) {
-            const timeInput = this.querySelector(`#${day}-time-${i}`);
-            const tempInput = this.querySelector(`#${day}-temp-${i}`);
-            
-            if(timeInput?.value && tempInput?.value) {
-              const [hours, minutes] = timeInput.value.split(':').map(Number);
-              const temp = Math.round(parseFloat(tempInput.value) * 10);
-              registerValues.push(hours, minutes, temp, 0);
-            }
-          } else {
-            // Add default values for periods 5-6
-            registerValues.push(24, 0, 160, 0);
-          }
-        }
-
-        if(isWeekend) {
-          // Write to Saturday and Sunday separately
-          await this.writeRegisters(this.dayRegisterStartingByte[5], registerValues); // Saturday
-          await this.writeRegisters(this.dayRegisterStartingByte[6], registerValues); // Sunday
-        } else {
-          // Concatenate values for all weekdays
-          const weekdayValues = Array(5).fill(registerValues).flat();
-          // Write to Monday-Friday in one call (registers 74-193)
-          await this.writeRegisters(this.dayRegisterStartingByte[0], weekdayValues);
-        }
-
-        editor.classList.remove('visible');
-        
-        // Wait for writes to complete before refreshing
-        setTimeout(() => {
-          this.readScheduleFromDevice();
-          this.updateScheduleDisplay();
-        }, 2000);
-      });
-
-      if(applyAllBtn) applyAllBtn.addEventListener('click', async ()=>{
-        const registerValues = [];
-        
-        // Get values from the form
-        for(let i=1; i<=6; i++) {
-          if(i <= 4) {
-            const timeInput = this.querySelector(`#${day}-time-${i}`);
-            const tempInput = this.querySelector(`#${day}-temp-${i}`);
-            
-            if(timeInput?.value && tempInput?.value) {
-              const [hours, minutes] = timeInput.value.split(':').map(Number);
-              const temp = Math.round(parseFloat(tempInput.value) * 10);
-              registerValues.push(hours, minutes, temp, 0);
-            }
-          } else {
-            // Add default values for periods 5-6
-            registerValues.push(24, 0, 160, 0);
-          }
-        }
-
-        // Create combined register values for all days (Sunday first)
-        const allDaysValues = [];
-        
-        // Start with Sunday (register 50)
-        allDaysValues.push(...registerValues);
-        
-        // Then Monday through Saturday (registers 74-217)
-        const weekdayValues = Array(6).fill(registerValues).flat();
-        allDaysValues.push(...weekdayValues);
-        
-        // Write all values starting from Sunday's register (50)
-        await this.writeRegisters(50, allDaysValues);
-
-        editor.classList.remove('visible');
-        
-        // Wait for write to complete before refreshing
-        setTimeout(() => {
-          this.readScheduleFromDevice();
-          this.updateScheduleDisplay();
-        }, 2000);
-      });
-
+      if(applyBtn) applyBtn.addEventListener('click', () => this.applySchedule(day, 'single'));
+      if(applyGroupBtn) applyGroupBtn.addEventListener('click', () => this.applySchedule(day, 'group'));
+      if(applyAllBtn) applyAllBtn.addEventListener('click', () => this.applySchedule(day, 'all'));
+      
       if(cancelBtn) cancelBtn.addEventListener('click', ()=>{ editor.classList.remove('visible'); });
     });
+  }
+  
+  getRegisterValuesFromInputs(day) {
+    const registerValues = [];
+    
+    // Get all periods (up to 6)
+    for(let i=1; i<=6; i++) {
+      if(i <= 4) {
+        const timeInput = this.querySelector(`#${day}-time-${i}`);
+        const tempInput = this.querySelector(`#${day}-temp-${i}`);
+        
+        if(timeInput?.value && tempInput?.value) {
+          const [hours, minutes] = timeInput.value.split(':').map(Number);
+          const temp = Math.round(parseFloat(tempInput.value) * 10);
+          registerValues.push(hours, minutes, temp, 0);
+        }
+      } else {
+        // Add default values for periods 5-6
+        registerValues.push(24, 0, 160, 0);
+      }
+    }
+    
+    return registerValues;
+  }
+
+  async applySchedule(day, type = 'single') {
+    const editor = this.querySelector(`#${day}-editor`);
+    const registerValues = this.getRegisterValuesFromInputs(day);
+
+    try {
+      switch(type) {
+        case 'single':
+          // Single day update
+          const dayIndex = this.dayOrder.indexOf(day);
+          await this.writeRegisters(this.dayRegisterStartingByte[dayIndex], registerValues);
+          break;
+
+        case 'group':
+          // Weekday/Weekend update
+          const isWeekend = day === 'saturday' || day === 'sunday';
+          if(isWeekend) {
+            // Write to Saturday and Sunday separately
+            await this.writeRegisters(this.dayRegisterStartingByte[5], registerValues, false); // Saturday
+            await this.writeRegisters(this.dayRegisterStartingByte[6], registerValues); // Sunday
+          } else {
+            // Write to Monday-Friday in one call
+            const weekdayValues = Array(5).fill(registerValues).flat();
+            await this.writeRegisters(this.dayRegisterStartingByte[0], weekdayValues);
+          }
+          break;
+
+        case 'all':
+          // All days update
+          const allDaysValues = [];
+          // Start with Sunday (register 50)
+          allDaysValues.push(...registerValues);
+          // Then Monday through Saturday (registers 74-217)
+          const remainingDaysValues = Array(6).fill(registerValues).flat();
+          allDaysValues.push(...remainingDaysValues);
+          await this.writeRegisters(50, allDaysValues);
+          break;
+      }
+
+      editor.classList.remove('visible');
+      
+      // Wait for writes to complete before refreshing
+      setTimeout(() => {
+        this.readScheduleFromDevice();
+        this.updateScheduleDisplay();
+      }, 2000);
+    } catch (error) {
+      console.error('Error applying schedule:', error);
+    }
   }
 
   prefillEditor(day){
@@ -684,12 +632,12 @@ class HeatmiserThermostatCard extends HTMLElement {
   }
 
   // Add this helper function after the constructor
-  async writeRegisters(registerStart, values) {
+  async writeRegisters(registerStart, values, isLastWrite = true) {
     await this._hass.callService('heatmiser_edge', 'write_register_range', {
       device_id: ['4e03fdc94f493c4af45a120ad23013e5'],
       register: registerStart,
       values: values.join(','),
-      refresh_values_after_writing: true
+      refresh_values_after_writing: isLastWrite
     });
   }
 }
