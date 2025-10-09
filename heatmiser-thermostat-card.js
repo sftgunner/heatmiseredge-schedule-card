@@ -54,6 +54,7 @@ class HeatmiserThermostatCard extends HTMLElement {
     this.thermostatScheduleRegister = new Array(7 * 6 * 4).fill(0);
     this.dayOrder = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
     this.dayRegisterStartingByte = [74, 98, 122, 146, 170, 194, 50]; // Starting byte for each day in the register map
+    this.entity = null;
   }
   
   set hass(hass) {
@@ -78,17 +79,23 @@ class HeatmiserThermostatCard extends HTMLElement {
   static getConfigForm() {
     return {
       schema: [
-        { name: "entity", required: true, selector: { entity: {} } },
-        { name: "device", required: false, selector: { device: { integration: "heatmiser_edge"} } },
+        { 
+          name: "device", 
+          required: true, 
+          selector: { 
+            device: { 
+              integration: "heatmiser_edge",
+              entity: {
+                domain: "climate"
+              }
+            } 
+          } 
+        }
       ],
       computeHelper: (schema) => {
         switch (schema.name) {
-          case "entity":
-          return "This text describes the function of the entity selector";
           case "device":
-          return "This text describes the function of the entity selector";
-          case "unit":
-          return "The unit of measurement for this card";
+            return "Select a Heatmiser Edge thermostat device";
         }
         return undefined;
       },
@@ -167,8 +174,22 @@ class HeatmiserThermostatCard extends HTMLElement {
     return this.thermostatScheduleRegister;
   }
   
-  updateContent(content,firstRender) {
-    var entityId = this.config.entity;
+  updateContent(content, firstRender) {
+    const deviceId = this.config.device;
+    const entityId = this.findClimateEntityFromDevice(deviceId);
+    this.entity = entityId;
+    
+    if (!entityId) {
+      content.innerHTML = `
+        <ha-card header="Heatmiser schedule">
+          <div class="card-content">
+            No climate entity found for device ID: ${deviceId}
+          </div>
+        </ha-card>
+      `;
+      return;
+    }
+    
     var entityState = this._hass.states[entityId];
     var temp = entityState ? entityState.attributes.temperature : 'N/A';
     var state = entityState ? entityState.state : 'unavailable';
@@ -195,7 +216,7 @@ class HeatmiserThermostatCard extends HTMLElement {
   }
   
   readScheduleFromDevice() {
-    const entityId = this.config.entity;
+    const entityId = this.entity;
     if (!entityId || !this._hass) return;
     
     const baseTempEntityId = entityId.replace('climate.', 'number.').replace('_thermostat', '');
@@ -252,9 +273,8 @@ class HeatmiserThermostatCard extends HTMLElement {
   
   setConfig(config) {
     console.log("Setting config");
-    // This method is called by Lovelace when the card is initialized
-    if (!config.entity) {
-      throw new Error("You need to define a climate entity");
+    if (!config.device) {
+      throw new Error("You need to define a device");
     }
     this.config = config;
   }
@@ -273,7 +293,7 @@ class HeatmiserThermostatCard extends HTMLElement {
   }
   
   getScheduleMode() {
-    const entityId = this.config.entity;
+    const entityId = this.entity;
     const modeEntityId = entityId.replace('climate.', 'select.').replace('_thermostat', '_schedule_mode');
     const modeState = this._hass?.states[modeEntityId];
     console.log(`Schedule mode entity: ${modeEntityId}, state: ${modeState?.state}`);
@@ -717,6 +737,25 @@ async writeRegisters(registerStart, values, isLastWrite = true) {
     values: values.join(','),
     refresh_values_after_writing: isLastWrite
   });
+}
+
+// Add this new method to find the climate entity
+findClimateEntityFromDevice(deviceId) {
+  if (!this._hass || !deviceId) return null;
+
+  // Get all entities
+  const entities = this._hass.entities || {};
+  
+  // Find the climate entity that belongs to this device
+  for (const [entityId, entity] of Object.entries(entities)) {
+    if (entity.device_id === deviceId && 
+        entityId.startsWith('climate.') && 
+        entityId.includes('thermostat')) {
+      return entityId;
+    }
+  }
+  
+  return null;
 }
 }
 
