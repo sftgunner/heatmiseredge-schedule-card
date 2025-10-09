@@ -75,6 +75,39 @@ class HeatmiserThermostatCard extends HTMLElement {
     }
   }
 
+  static getConfigForm() {
+    return {
+      schema: [
+        { name: "entity", required: true, selector: { entity: {} } },
+        { name: "device", required: false, selector: { device: { integration: "heatmiser_edge"} } },
+      ],
+      computeHelper: (schema) => {
+        switch (schema.name) {
+          case "entity":
+            return "This text describes the function of the entity selector";
+          case "device":
+            return "This text describes the function of the entity selector";
+          case "unit":
+            return "The unit of measurement for this card";
+        }
+        return undefined;
+      },
+      assertConfig: (config) => {
+        if (config.other_option) {
+          throw new Error("'other_option' is unexpected.");
+        }
+      },
+    };
+  }
+
+getGridOptions() {
+  return {
+    rows: 20,
+    columns: 24,
+    min_rows: 20,
+  };
+}
+
   updateNumberValue(entity,value){
     if (!this._hass) return;
     console.log(`Updating ${entity} to ${value}`);
