@@ -62,8 +62,8 @@ class HeatmiserThermostatCard extends HTMLElement {
     this._hass = hass; // Store the hass object for later use
     if (!this.content) {
       this.innerHTML = `
-      <ha-card header="Heatmiser schedule">
-          <div class="card-content">Loading content from climate entity...</div>
+        <ha-card header="Heatmiser schedule">
+          <div class="card-content">Loading content...</div>
         </ha-card>
         `;
       this.content = this.querySelector(".card-content");
@@ -95,7 +95,7 @@ class HeatmiserThermostatCard extends HTMLElement {
       computeHelper: (schema) => {
         switch (schema.name) {
           case "device":
-            return "Select a Heatmiser Edge thermostat device";
+          return "Select a Heatmiser Edge thermostat device";
         }
         return undefined;
       },
@@ -269,35 +269,6 @@ class HeatmiserThermostatCard extends HTMLElement {
       //     this.parseTimeToMinutes(a.time) - this.parseTimeToMinutes(b.time)
     //   );
     // }
-  }
-  
-  setConfig(config) {
-    console.log("Setting config");
-    if (!config.device) {
-      throw new Error("You need to define a device");
-    }
-    this.config = config;
-  }
-  
-  getColorForTemperature(temp) {
-    if (temp < 15) return '#185fb6';
-    if (temp < 19) return '#00bcd4';
-    if (temp < 23) return '#ffc107';
-    if (temp >= 23) return '#e53935';
-    return '#fdd835';
-  }
-  
-  parseTimeToMinutes(time) {
-    const [hh, mm] = time.split(':').map(Number);
-    return hh * 60 + mm;
-  }
-  
-  getScheduleMode() {
-    const entityId = this.entity;
-    const modeEntityId = entityId.replace('climate.', 'select.').replace('_thermostat', '_schedule_mode');
-    const modeState = this._hass?.states[modeEntityId];
-    console.log(`Schedule mode entity: ${modeEntityId}, state: ${modeState?.state}`);
-    return modeState?.state || 'Full Week';
   }
   
   render() {
@@ -488,29 +459,6 @@ attachEventHandlers() {
   });
 }
 
-getRegisterValuesFromInputs(day) {
-  const registerValues = [];
-  
-  // Get all periods (up to 6)
-  for(let i=1; i<=6; i++) {
-    if(i <= 4) {
-      const timeInput = this.querySelector(`#${day}-time-${i}`);
-      const tempInput = this.querySelector(`#${day}-temp-${i}`);
-      
-      if(timeInput?.value && tempInput?.value) {
-        const [hours, minutes] = timeInput.value.split(':').map(Number);
-        const temp = Math.round(parseFloat(tempInput.value) * 10);
-        registerValues.push(hours, minutes, temp, 0);
-      }
-    } else {
-      // Add default values for periods 5-6
-      registerValues.push(24, 0, 160, 0);
-    }
-  }
-  
-  return registerValues;
-}
-
 async applySchedule(day, type = 'single') {
   const editor = this.querySelector(`#${day}-editor`);
   const registerValues = this.getRegisterValuesFromInputs(day);
@@ -558,16 +506,6 @@ async applySchedule(day, type = 'single') {
     }, 2000);
   } catch (error) {
     console.error('Error applying schedule:', error);
-  }
-}
-
-prefillEditor(day){
-  for(let i=1;i<=4;i++){
-    const entry = this.thermostatSchedule[day][i-1];
-    if(entry){
-      this.querySelector(`#${day}-time-${i}`).value = entry.time;
-      this.querySelector(`#${day}-temp-${i}`).value = entry.temp;
-    }
   }
 }
 
@@ -742,21 +680,83 @@ async writeRegisters(registerStart, values, isLastWrite = true) {
 // Add this new method to find the climate entity
 findClimateEntityFromDevice(deviceId) {
   if (!this._hass || !deviceId) return null;
-
+  
   // Get all entities
   const entities = this._hass.entities || {};
   
   // Find the climate entity that belongs to this device
   for (const [entityId, entity] of Object.entries(entities)) {
     if (entity.device_id === deviceId && 
-        entityId.startsWith('climate.') && 
-        entityId.includes('thermostat')) {
-      return entityId;
+      entityId.startsWith('climate.') && 
+      entityId.includes('thermostat')) {
+        return entityId;
+      }
+    }
+    
+    return null;
+  }
+  
+  setConfig(config) {
+    console.log("Setting config");
+    if (!config.device) {
+      throw new Error("You need to define a device");
+    }
+    this.config = config;
+  }
+  
+  getColorForTemperature(temp) {
+    if (temp < 15) return '#185fb6';
+    if (temp < 19) return '#00bcd4';
+    if (temp < 23) return '#ffc107';
+    if (temp >= 23) return '#e53935';
+    return '#fdd835';
+  }
+  
+  prefillEditor(day){
+    for(let i=1;i<=4;i++){
+      const entry = this.thermostatSchedule[day][i-1];
+      if(entry){
+        this.querySelector(`#${day}-time-${i}`).value = entry.time;
+        this.querySelector(`#${day}-temp-${i}`).value = entry.temp;
+      }
     }
   }
   
-  return null;
-}
+  parseTimeToMinutes(time) {
+    const [hh, mm] = time.split(':').map(Number);
+    return hh * 60 + mm;
+  }
+  
+  getRegisterValuesFromInputs(day) {
+    const registerValues = [];
+    
+    // Get all periods (up to 6)
+    for(let i=1; i<=6; i++) {
+      if(i <= 4) {
+        const timeInput = this.querySelector(`#${day}-time-${i}`);
+        const tempInput = this.querySelector(`#${day}-temp-${i}`);
+        
+        if(timeInput?.value && tempInput?.value) {
+          const [hours, minutes] = timeInput.value.split(':').map(Number);
+          const temp = Math.round(parseFloat(tempInput.value) * 10);
+          registerValues.push(hours, minutes, temp, 0);
+        }
+      } else {
+        // Add default values for periods 5-6
+        registerValues.push(24, 0, 160, 0);
+      }
+    }
+    
+    return registerValues;
+  }
+  
+  getScheduleMode() {
+    const entityId = this.entity;
+    const modeEntityId = entityId.replace('climate.', 'select.').replace('_thermostat', '_schedule_mode');
+    const modeState = this._hass?.states[modeEntityId];
+    console.log(`Schedule mode entity: ${modeEntityId}, state: ${modeState?.state}`);
+    return modeState?.state || 'Full Week';
+  }
 }
 
 customElements.define('heatmiser-thermostat-card', HeatmiserThermostatCard);
