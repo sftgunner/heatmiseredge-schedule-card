@@ -55,6 +55,12 @@ class HeatmiserThermostatCard extends HTMLElement {
     this.dayOrder = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
     this.dayRegisterStartingByte = [74, 98, 122, 146, 170, 194, 50]; // Starting byte for each day in the register map
     this.entity = null;
+
+    // Track last rendered schedule per day to avoid unnecessary DOM updates
+    this._lastRenderedSchedule = {};
+    this.dayOrder.forEach(d => {
+      this._lastRenderedSchedule[d] = JSON.stringify(this.thermostatSchedule[d] || []);
+    });
   }
   
   set hass(hass) {
@@ -582,15 +588,26 @@ updateScheduleDisplay() {
   
   const scheduleMode = this.getScheduleMode();
   const visibleDays = scheduleMode === 'Weekday/Weekend' ? 
-  ['monday', 'saturday'] : 
-  this.dayOrder;
+    ['monday', 'saturday'] : 
+    this.dayOrder;
   
   visibleDays.forEach(day => {
     const slots = this.thermostatSchedule[day];
+    const currentSerialized = JSON.stringify(slots || []);
+    // Skip updating this day if nothing changed since last render
+    if (this._lastRenderedSchedule[day] === currentSerialized) {
+      console.log(`No changes for ${day}, skipping update.`);
+      return;
+    }
+
     const container = this.querySelector(`#${day}`);
+    if (!container) {
+      // still update the cache so that future checks are correct
+      this._lastRenderedSchedule[day] = currentSerialized;
+      return;
+    }
     
-    if (!container) return;
-    
+    // Proceed to update DOM for this day (existing update logic)
     // Get all existing segments
     const segments = container.querySelectorAll('.segment');
     
@@ -623,6 +640,9 @@ updateScheduleDisplay() {
         container.appendChild(initialDiv);
       }
       currentSegments = currentSegments.slice(1);
+    } else {
+      // If there's no initial segment but one exists in DOM, ensure we treat segments correctly
+      // leave currentSegments as-is (no slice)
     }
     
     // Update remaining segments
@@ -664,6 +684,10 @@ updateScheduleDisplay() {
         if (tempInput) tempInput.value = slot.temp;
       });
     }
+
+    // Mark this day's schedule as rendered
+    this._lastRenderedSchedule[day] = currentSerialized;
+    console.log(`Updated display for ${day}`)
   });
 }
 
