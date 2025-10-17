@@ -518,17 +518,17 @@ attachEventHandlers() {
           this.adjustStartTimeInput(`${day}-time-${i}`, -30);
         });
       }
-      // temp +/- also change the start time by ±30 minutes per spec
+      // temp +/- now change the temperature value (±0.5°C) instead of the start time
       if (tempInc) {
         tempInc.addEventListener('click', (ev) => {
           ev.stopPropagation();
-          this.adjustStartTimeInput(`${day}-time-${i}`, 30);
+          this.adjustTempInput(`${day}-temp-${i}`, 0.5);
         });
       }
       if (tempDec) {
         tempDec.addEventListener('click', (ev) => {
           ev.stopPropagation();
-          this.adjustStartTimeInput(`${day}-time-${i}`, -30);
+          this.adjustTempInput(`${day}-temp-${i}`, -0.5);
         });
       }
     }
@@ -561,6 +561,35 @@ adjustStartTimeInput(inputId, deltaMinutes) {
   // For safety we do not auto-call HA services here unless time entities are mapped elsewhere.
 }
 
+// Helper: adjust a temp input by delta (step in °C), clamped to min/max attributes
+adjustTempInput(inputId, delta) {
+  const input = this.querySelector(`#${inputId}`);
+  if (!input) return;
+  const min = parseFloat(input.getAttribute('min')) || -Infinity;
+  const max = parseFloat(input.getAttribute('max')) || Infinity;
+  const step = parseFloat(input.getAttribute('step')) || 0.5;
+  let val = parseFloat(input.value);
+  if (Number.isNaN(val)) {
+    // if empty, initialize to min or 0
+    if (isFinite(min) && min !== -Infinity) {
+      val = min;
+    } else {
+      val = 0;
+    }
+  }
+  // apply delta and round to step precision
+  let newVal = val + delta;
+  // clamp
+  if (newVal < min) newVal = min;
+  if (newVal > max) newVal = max;
+  // round to nearest step (avoid floating point imprecision)
+  const precision = Math.round(1 / step);
+  newVal = Math.round(newVal * precision) / precision;
+  input.value = Number.isInteger(newVal) ? newVal.toString() : newVal.toFixed((step % 1) ? (step.toString().split('.')[1].length) : 0);
+  // Optionally, if you want to push changes to Home Assistant number entities, call updateNumberValue here
+  // e.g. this.updateNumberValue(numberEntityId, newVal);
+}
+ 
 async applySchedule(day, type = 'single') {
   const editor = this.querySelector(`#${day}-editor`);
   const registerValues = this.getRegisterValuesFromInputs(day);
