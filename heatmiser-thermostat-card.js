@@ -55,7 +55,7 @@ class HeatmiserThermostatCard extends HTMLElement {
     this.dayOrder = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
     this.dayRegisterStartingByte = [74, 98, 122, 146, 170, 194, 50]; // Starting byte for each day in the register map
     this.entity = null;
-
+    
     // Track last rendered schedule per day to avoid unnecessary DOM updates
     this._lastRenderedSchedule = {};
     this.dayOrder.forEach(d => {
@@ -302,6 +302,11 @@ class HeatmiserThermostatCard extends HTMLElement {
         .slot-pair { display:grid; grid-template-columns:auto 1fr auto 1fr; gap:6px 10px; align-items:center; padding:8px; border:1px solid #e6e6e6; border-radius:8px; background-old:#fafafa; }
         .slot-label { grid-column:1 / -1; margin-bottom:4px; color:#666; font-size:12px; }
         .day-editor input[type="time"], .day-editor input[type="number"] { padding:6px 8px; border-radius:4px; border:1px solid #ccc; font-size:14px; }
+        .controls { display:flex; align-items:center; gap:6px; }
+        .controls label { min-width:48px; }
+        .btn-inc, .btn-dec { padding:6px 8px; border-radius:4px; border:1px solid #ccc; cursor:pointer; min-width:36px; }
+        .btn-inc { background: #2e7d32; color:#fff; border-color:#2e7d32; }
+        .btn-dec { background: #c62828; color:#fff; border-color:#c62828; }
         .actions { margin-top:8px; display:flex; gap:8px; }
         .actions button { padding:6px 10px; border-radius:4px; border:1px solid #ccc; cursor:pointer; }
         .actions button.apply { background:#1976d2; border-color:#1976d2; color:#fff; }
@@ -310,6 +315,11 @@ class HeatmiserThermostatCard extends HTMLElement {
         .entity-info { color: #666; font-size: 14px; margin-top: 4px; }
         .entity-id { color: #1976d2; margin-bottom: 2px; }
         .entity-state { font-weight: 500; }
+         /* Responsive: on small screens put start and temp on their own rows */
+         @media (max-width: 480px) {
+           .slot-pair { grid-template-columns: 1fr; gap:6px; }
+           .controls { width:100%; justify-content:flex-start; }
+         }
       </style>
     `;
     
@@ -364,10 +374,18 @@ class HeatmiserThermostatCard extends HTMLElement {
               ${[1,2,3,4].map(i => `
               <div class="slot-pair">
                 <div class="slot-label">Slot ${i}</div>
-                <label>Start</label>
-                <input type="time" id="${day}-time-${i}" step="300">
-                <label>Temp</label>
-                <input type="number" id="${day}-temp-${i}" min="5" max="35" step="0.5">
+                <div class="controls">
+                  <label>Start</label>
+                  <button class="btn-dec" id="${day}-time-${i}-dec">-</button>
+                  <input type="time" id="${day}-time-${i}" step="300">
+                  <button class="btn-inc" id="${day}-time-${i}-inc">+</button>
+                </div>
+                <div class="controls">
+                  <label>Temp</label>
+                  <button class="btn-dec" id="${day}-temp-${i}-dec">-</button>
+                  <input type="number" id="${day}-temp-${i}" min="5" max="35" step="0.5">
+                  <button class="btn-inc" id="${day}-temp-${i}-inc">+</button>
+                </div>
               </div>`).join('')}
             </div>
             <div class="actions">
@@ -437,6 +455,11 @@ attachEventHandlers() {
     
     if(row) {
       row.addEventListener('click', e => {
+        // Do not toggle editor if the click originated inside the editor itself,
+        // or if it was on a button/input (those have their own handlers).
+        if (e.target.closest('.day-editor')) {
+          return;
+        }
         if(!e.target.closest('button') && !e.target.closest('input')) {
           editor.classList.toggle('visible');
           this.prefillEditor(day);
@@ -475,7 +498,67 @@ attachEventHandlers() {
         editor.classList.remove('visible');
       });
     }
+    
+    // +/- buttons for time/temp controls: both should adjust the start time by ±30min
+    for (let i = 1; i <= 4; i++) {
+      const timeInc = this.querySelector(`#${day}-time-${i}-inc`);
+      const timeDec = this.querySelector(`#${day}-time-${i}-dec`);
+      const tempInc = this.querySelector(`#${day}-temp-${i}-inc`);
+      const tempDec = this.querySelector(`#${day}-temp-${i}-dec`);
+      
+      if (timeInc) {
+        timeInc.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          this.adjustStartTimeInput(`${day}-time-${i}`, 30);
+        });
+      }
+      if (timeDec) {
+        timeDec.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          this.adjustStartTimeInput(`${day}-time-${i}`, -30);
+        });
+      }
+      // temp +/- also change the start time by ±30 minutes per spec
+      if (tempInc) {
+        tempInc.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          this.adjustStartTimeInput(`${day}-time-${i}`, 30);
+        });
+      }
+      if (tempDec) {
+        tempDec.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          this.adjustStartTimeInput(`${day}-time-${i}`, -30);
+        });
+      }
+    }
   });
+}
+
+// Helper: adjust a time input by deltaMinutes, clamp 00:00..23:30
+adjustStartTimeInput(inputId, deltaMinutes) {
+  const input = this.querySelector(`#${inputId}`);
+  if (!input) return;
+  let val = input.value;
+  if (!val) {
+    val = '00:00';
+  }
+  // Normalize "HH:MM" (ignore possible seconds)
+  const parts = val.split(':');
+  let hh = parseInt(parts[0], 10) || 0;
+  let mm = parseInt(parts[1], 10) || 0;
+  let total = hh * 60 + mm;
+  total += deltaMinutes;
+  if (total < 0) total = 0;
+  const maxTotal = 23 * 60 + 30; // 23:30
+  if (total > maxTotal) total = maxTotal;
+  const newH = Math.floor(total / 60).toString().padStart(2, '0');
+  const newM = (total % 60).toString().padStart(2, '0');
+  const newVal = `${newH}:${newM}`;
+  input.value = newVal;
+  // If there's a corresponding time entity to update, call updateTimeValue
+  // Try to infer entity id pattern: if input id corresponds to config device mapping we use updateTimeValue
+  // For safety we do not auto-call HA services here unless time entities are mapped elsewhere.
 }
 
 async applySchedule(day, type = 'single') {
@@ -615,7 +698,7 @@ updateScheduleDisplay() {
       console.log(`No changes for ${day}, skipping update.`);
       return;
     }
-
+    
     const container = this.querySelector(`#${day}`);
     if (!container) {
       // still update the cache so that future checks are correct
@@ -700,7 +783,7 @@ updateScheduleDisplay() {
         if (tempInput) tempInput.value = slot.temp;
       });
     }
-
+    
     // Mark this day's schedule as rendered
     this._lastRenderedSchedule[day] = currentSerialized;
     console.log(`Updated display for ${day}`)
@@ -727,14 +810,14 @@ findClimateEntityFromDevice(deviceId) {
   
   for (const [entityId, entity] of Object.entries(entities)) {
     if (entity.device_id === deviceId && 
-        entityId.startsWith('climate.') && 
-        entityId.includes('thermostat')) {
-      return entityId;
+      entityId.startsWith('climate.') && 
+      entityId.includes('thermostat')) {
+        return entityId;
+      }
     }
+    
+    return null;
   }
-  
-  return null;
-}
   
   setConfig(config) {
     console.log("Setting config");
