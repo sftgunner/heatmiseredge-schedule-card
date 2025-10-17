@@ -331,14 +331,24 @@ class HeatmiserThermostatCard extends HTMLElement {
         </div>
     `;
     const scheduleMode = this.getScheduleMode();
-    const visibleDays = scheduleMode === 'Weekday/Weekend' ? 
-    ['monday', 'saturday'] : 
-    this.dayOrder;
+    let visibleDays;
+    if (scheduleMode === 'Weekday/Weekend') {
+      visibleDays = ['monday', 'saturday'];
+    } else {
+      visibleDays = this.dayOrder;
+    }
     
     visibleDays.forEach(day => {
-      const displayName = scheduleMode === 'Weekday/Weekend' ?
-      (day === 'monday' ? 'Weekdays' : 'Weekends') :
-      day.charAt(0).toUpperCase() + day.slice(1);
+      let displayName;
+      if (scheduleMode === 'Weekday/Weekend') {
+        if (day === 'monday') {
+          displayName = 'Weekdays';
+        } else {
+          displayName = 'Weekends';
+        }
+      } else {
+        displayName = day.charAt(0).toUpperCase() + day.slice(1);
+      }
       
       htmlContent += `
         <div class="day-row" data-day="${day}">
@@ -401,9 +411,12 @@ attachEventHandlers() {
   }
   
   const scheduleMode = this.getScheduleMode();
-  const visibleDays = scheduleMode === 'Weekday/Weekend' ? 
-  ['monday', 'saturday'] : 
-  this.dayOrder;
+  let visibleDays;
+  if (scheduleMode === 'Weekday/Weekend') {
+    visibleDays = ['monday', 'saturday'];
+  } else {
+    visibleDays = this.dayOrder;
+  }
   
   visibleDays.forEach(day => {
     const row = this.querySelector(`.day-row[data-day="${day}"]`);
@@ -587,9 +600,12 @@ updateScheduleDisplay() {
   console.log("Updating schedule display at " + new Date().toLocaleTimeString());
   
   const scheduleMode = this.getScheduleMode();
-  const visibleDays = scheduleMode === 'Weekday/Weekend' ? 
-    ['monday', 'saturday'] : 
-    this.dayOrder;
+  let visibleDays;
+  if (scheduleMode === 'Weekday/Weekend') {
+    visibleDays = ['monday', 'saturday'];
+  } else {
+    visibleDays = this.dayOrder;
+  }
   
   visibleDays.forEach(day => {
     const slots = this.thermostatSchedule[day];
@@ -703,22 +719,22 @@ async writeRegisters(registerStart, values, isLastWrite = true) {
 
 // Add this new method to find the climate entity
 findClimateEntityFromDevice(deviceId) {
-  if (!this._hass || !deviceId) return null;
-  
-  // Get all entities
-  const entities = this._hass.entities || {};
-  
-  // Find the climate entity that belongs to this device
-  for (const [entityId, entity] of Object.entries(entities)) {
-    if (entity.device_id === deviceId && 
-      entityId.startsWith('climate.') && 
-      entityId.includes('thermostat')) {
-        return entityId;
-      }
-    }
-    
+  if (!this._hass || !deviceId) {
     return null;
   }
+  
+  const entities = this._hass.entities || {};
+  
+  for (const [entityId, entity] of Object.entries(entities)) {
+    if (entity.device_id === deviceId && 
+        entityId.startsWith('climate.') && 
+        entityId.includes('thermostat')) {
+      return entityId;
+    }
+  }
+  
+  return null;
+}
   
   setConfig(config) {
     console.log("Setting config");
@@ -729,10 +745,18 @@ findClimateEntityFromDevice(deviceId) {
   }
   
   getColorForTemperature(temp) {
-    if (temp < 15) return '#185fb6';
-    if (temp < 19) return '#00bcd4';
-    if (temp < 23) return '#ffc107';
-    if (temp >= 23) return '#e53935';
+    if (temp < 15) {
+      return '#185fb6';
+    }
+    if (temp < 19) {
+      return '#00bcd4';
+    }
+    if (temp < 23) {
+      return '#ffc107';
+    }
+    if (temp >= 23) {
+      return '#e53935';
+    }
     return '#fdd835';
   }
   
@@ -779,7 +803,12 @@ findClimateEntityFromDevice(deviceId) {
     const modeEntityId = entityId.replace('climate.', 'select.').replace('_thermostat', '_schedule_mode');
     const modeState = this._hass?.states[modeEntityId];
     console.log(`Schedule mode entity: ${modeEntityId}, state: ${modeState?.state}`);
-    return modeState?.state || 'Full Week';
+    
+    if (modeState && modeState.state) {
+      return modeState.state;
+    } else {
+      return 'Full Week';
+    }
   }
 }
 
