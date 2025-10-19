@@ -929,3 +929,12 @@ findClimateEntityFromDevice(deviceId) {
 }
 
 customElements.define('heatmiseredge-schedule-card', HeatmiserEdgeScheduleCard);
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: "heatmiseredge-schedule-card",
+  name: "Heatmiser Edge schedule card",
+  preview: false, // Optional - defaults to false
+  description: "Allows you to easily modify the schedules on your Heatmiser edge thermostats", // Optional
+  documentationURL:
+    "https://github.com/sftgunner/heatmiseredge-schedule-card", // Adds a help link in the frontend card editor
+});

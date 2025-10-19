@@ -15,13 +15,13 @@ A custom card for Home Assistant that provides a visual interface for viewing an
 
 ## Installation
 
-1. Download the `heatmiser-thermostat-card.js` file
+1. Download the `heatmiseredge-schedule-card.js` file
 2. Copy it to your `config/www` folder
 3. Add the following to your dashboard resources:
 
 ```yaml
 resources:
-  - url: /local/heatmiser-thermostat-card.js
+  - url: /local/heatmiseredge-schedule-card.js
     type: module
 ```
 
@@ -36,7 +36,7 @@ Add the card to your dashboard through the UI:
 Or add it manually in YAML:
 
 ```yaml
-type: custom:heatmiser-thermostat-card
+type: custom:heatmiseredge-schedule-card
 device: YOUR_DEVICE_ID
 ```
 
