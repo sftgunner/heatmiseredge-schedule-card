@@ -82,8 +82,10 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     this._hass = hass; // Store the hass object for later use
     if (!this.content) {
       this.innerHTML = `
-        <ha-card header="Heatmiser schedule">
-          <div class="card-content">Loading content...</div>
+        <ha-card header="">
+          <div class="card-content">
+          Loading content...
+          </div>
         </ha-card>
         `;
       this.content = this.querySelector(".card-content");
@@ -224,6 +226,22 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     
     this.updateScheduleDisplay();
     this.updateTimeIndicator();  // Add this line
+
+    // Check to see if thermostat is in nominal operation mode (or any things we need to alert the end user about)
+    let devicePower = this.getEntityState(this.findEntityFromDevice(this.activeDeviceId,"select.","_device_power"),"unknown");
+        let operationMode = this.getEntityState(this.findEntityFromDevice(this.activeDeviceId,"select.","_operation_mode"),"unknown");
+    if (devicePower === "Off") {
+      this.setAlert(`Thermostat device is turned off. Please turn back on for schedule to take effect.`,`error`);
+    }
+    else if (operationMode === "Override" || operationMode === "Holiday") {
+      this.setAlert(`Thermostat temperature has been temporarily overriden. Schedule will resume at next time slot`,`info`);
+    }
+    else if (operationMode !== "Schedule") {
+      this.setAlert(`Thermostat is in '${operationMode}' mode. Schedule changes may not take effect until normal operation is resumed.`,`warning`);
+    }
+    else {
+      this.setAlert(``,"none"); // Clear any existing alerts
+    }
     
     // Update summary at top of page
     var entityState = this._hass.states[this.climateEntity];
@@ -262,8 +280,6 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         // Get states
         const tempState = this.getEntityState(tempEntityId);
         const timeState = this.getEntityState(timeEntityId,"unknown");
-        
-        console.log(`Reading ${fullDay} Period ${period}: Temp Entity: ${tempState}, Time Entity: ${timeState}`);
         
         if (tempState && timeState) {
           // Convert time from minutes since midnight to HH:MM format
@@ -352,6 +368,9 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     
     let htmlContent = `
       <div class="week-container">
+        <!-- Alert placeholder: controlled via setAlert(text,severity) -->
+        <ha-alert id="card-alert" alert-type="info" style="display:none;"></ha-alert>
+
         <div class="thermostat-header">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <div class="entity-info">
@@ -947,6 +966,26 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         return entity.state;
       }
       return defaultValue;
+    }
+    
+    // New: setAlert(text, severity)
+    // severity: 'error', 'warning', 'info', 'success', 'none'
+    setAlert(text, severity='info') {
+      if (!this.content) return;
+      const alertEl = this.content.querySelector('#card-alert');
+      if (!alertEl) return;
+      // If severity is 'none' or falsy text -> hide
+      if (!text || severity === 'none') {
+        alertEl.style.display = 'none';
+        alertEl.textContent = '';
+        return;
+      }
+      // Validate severity and map to acceptable alert-type values
+      let allowed = ['error','warning','info','success'];
+      let sev = allowed.includes(severity) ? severity : 'info';
+      alertEl.setAttribute('alert-type', sev);
+      alertEl.textContent = text;
+      alertEl.style.display = ''; // restore default display
     }
   }
   
