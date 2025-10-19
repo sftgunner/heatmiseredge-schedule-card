@@ -1,6 +1,6 @@
 // Heatmiser Thermostat Custom Card (Plain JS for type: js)
 
-class HeatmiserThermostatCard extends HTMLElement {
+class HeatmiserEdgeScheduleCard extends HTMLElement {
   constructor() {
     super();
     this.thermostatSchedule = {
@@ -928,4 +928,4 @@ findClimateEntityFromDevice(deviceId) {
   }
 }
 
-customElements.define('heatmiser-thermostat-card', HeatmiserThermostatCard);
+customElements.define('heatmiseredge-schedule-card', HeatmiserEdgeScheduleCard);
