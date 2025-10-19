@@ -54,7 +54,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     this.thermostatScheduleRegister = new Array(7 * 6 * 4).fill(0);
     this.dayOrder = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
     this.dayRegisterStartingByte = [74, 98, 122, 146, 170, 194, 50]; // Starting byte for each day in the register map
-    this.entity = null;
+    this.climateEntity = null;
     
     // Track last rendered schedule per day to avoid unnecessary DOM updates
     this._lastRenderedSchedule = {};
@@ -87,7 +87,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
       schema: [
         { 
           name: "device", 
-          required: true, 
+          multiple: true,
           selector: { 
             device: { 
               integration: "heatmiser_edge",
@@ -182,10 +182,11 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
   
   updateContent(content, firstRender) {
     const deviceId = this.config.device;
-    const entityId = this.findClimateEntityFromDevice(deviceId);
-    this.entity = entityId;
+    const previousScheduleModeState = this.getEntityState(this.ScheduleMode)
+    this.scheduleMode = this.findScheduleModeEntityFromDevice(deviceId);
+    this.climateEntity = this.findClimateEntityFromDevice(deviceId);
     
-    if (!entityId) {
+    if (!this.climateEntity) {
       content.innerHTML = `
         <ha-card header="Heatmiser schedule">
           <div class="card-content">
@@ -196,16 +197,12 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
       return;
     }
     
-    var entityState = this._hass.states[entityId];
-    var temp = entityState ? entityState.attributes.temperature : 'N/A';
-    var state = entityState ? entityState.state : 'unavailable';
-    
-    var numberEntityId = entityId.replace('climate.','number.');
-    numberEntityId = numberEntityId.replace('_thermostat','_1mon_period1_temp');
-    
     this.readScheduleFromDevice();
+
+    // Check if schedule mode has changed
+    const scheduleModeChanged = previousScheduleModeState !== this.scheduleMode.state;
     
-    if (firstRender){
+    if (firstRender || scheduleModeChanged){
       this.render();
       this.renderAll();
     }
@@ -213,16 +210,18 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
       this.updateScheduleDisplay();
     }
     
-    content.querySelector('.entity-id').textContent = entityId;
+    // Update summary at top of page
+    var entityState = this._hass.states[this.climateEntity];
+    var temp = entityState ? entityState.attributes.temperature : 'N/A';
+    var state = this.getEntityState(this.climateEntity, 'unknown');
+    content.querySelector('.entity-id').textContent = this.climateEntity;
     content.querySelector('.entity-state').textContent = `Current: ${temp}°C (${state})`;
     content.querySelector('.last-update').textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
     // content.querySelector('.entity-mode').textContent = `Current: ${temp}°C (${state})`;
-    
-    //    
   }
   
   readScheduleFromDevice() {
-    const entityId = this.entity;
+    const entityId = this.climateEntity;
     if (!entityId || !this._hass) return;
     
     const baseTempEntityId = entityId.replace('climate.', 'number.').replace('_thermostat', '');
@@ -343,7 +342,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     const scheduleMode = this.getScheduleMode();
     let visibleDays;
     if (scheduleMode === 'Weekday/Weekend') {
-      visibleDays = ['monday', 'saturday'];
+      visibleDays = ['friday', 'saturday']; // Default is using friday for weekdays, and saturday for weekends
     } else {
       visibleDays = this.dayOrder;
     }
@@ -351,7 +350,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     visibleDays.forEach(day => {
       let displayName;
       if (scheduleMode === 'Weekday/Weekend') {
-        if (day === 'monday') {
+        if (day === 'friday') {
           displayName = 'Weekdays';
         } else {
           displayName = 'Weekends';
@@ -845,6 +844,25 @@ findClimateEntityFromDevice(deviceId) {
     
     return null;
   }
+
+  // Add this new method to find the schedule mode entity
+findScheduleModeEntityFromDevice(deviceId) {
+  if (!this._hass || !deviceId) {
+    return null;
+  }
+  
+  const entities = this._hass.entities || {};
+  
+  for (const [entityId, entity] of Object.entries(entities)) {
+    if (entity.device_id === deviceId && 
+      entityId.startsWith('select.') && 
+      entityId.includes('schedule_mode')) {
+        return entityId;
+      }
+    }
+    
+    return null;
+  }
   
   setConfig(config) {
     console.log("Setting config");
@@ -909,16 +927,22 @@ findClimateEntityFromDevice(deviceId) {
   }
   
   getScheduleMode() {
-    const entityId = this.entity;
-    const modeEntityId = entityId.replace('climate.', 'select.').replace('_thermostat', '_schedule_mode');
-    const modeState = this._hass?.states[modeEntityId];
-    console.log(`Schedule mode entity: ${modeEntityId}, state: ${modeState?.state}`);
+    const modeState = this._hass.states[this.scheduleMode];
+    console.log(`Schedule mode entity: ${this.scheduleMode}, state: ${modeState?.state}`);
     
     if (modeState && modeState.state) {
       return modeState.state;
     } else {
       return 'Full Week';
     }
+  }
+
+  getEntityState(entityId,defaultValue=null) {
+    const entity = this._hass.states[entityId];
+    if (entity) {
+      return entity.state;
+    }
+    return defaultValue;
   }
 }
 
