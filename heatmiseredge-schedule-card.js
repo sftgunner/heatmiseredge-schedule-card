@@ -219,11 +219,10 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     
     if (firstRender || scheduleModeChanged){
       this.render();
-      this.renderAll();
+      this.attachEventHandlers();
     }
-    else{
-      this.updateScheduleDisplay();
-    }
+    
+    this.updateScheduleDisplay();
     
     // Update summary at top of page
     var entityState = this._hass.states[this.climateEntity];
@@ -298,9 +297,14 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     //   );
     // }
   }
+
+  render(){
+      this.renderFramework(); // Render framework
+      this.dayOrder.forEach(day => this.renderDay(day)); // Render individual days
+  }
   
-  render() {
-    console.log("Starting render at time "+new Date().toLocaleTimeString());
+  renderFramework() {
+    console.log("Starting to render framework at time "+new Date().toLocaleTimeString());
     const style = `
       <style>
         .week-container { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial; padding: 12px; }
@@ -429,8 +433,49 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     });
     htmlContent += `</div>`;
     this.content.innerHTML = style + htmlContent;
+  }
+  
+  renderDay(day) {
+    // Render framework for a single day. NB this does not populate actual values etc, that is done in updateScheduleDisplay
+    const container = this.querySelector(`#${day}`);
+    const ticker = this.querySelector(`#${day}-ticker`);
+    const labels = this.querySelector(`#${day}-ticker-labels`);
+    const slots = this.thermostatSchedule[day];
+    if(!container || !ticker || !labels) return;
     
-    this.attachEventHandlers();
+    container.innerHTML = '';
+    if(slots.length===0) return;
+    
+    // Initialise segments with a temperature of 0degC
+    // NB the 1st segment is a placeholder for previous day's last temp if first slot > 00:00
+    for(let i = 0; i < 7; i++) {
+      const widthPercent = 100/7 // Space evenly for 6 segments over 24 hours
+      const div = document.createElement('div');
+      div.className = 'segment';
+      div.style.width = widthPercent + '%';
+      div.style.background = this.getColorForTemperature(0);
+      div.style.display = 'flex'; // Default to flex to show
+      div.textContent =  'N/A';
+      container.appendChild(div);
+    }
+    
+    // Build tickers
+    ticker.innerHTML='';
+    labels.innerHTML='';
+    for(let i=0;i<96;i++){
+      const tick = document.createElement('div');
+      tick.className='tick';
+      if(i%4===0) tick.classList.add('hour');
+      if(i%12===0) tick.classList.add('major');
+      ticker.appendChild(tick);
+    }
+    for(let h=0;h<=24;h+=3){
+      const lbl = document.createElement('div');
+      lbl.className='tick-number';
+      lbl.style.left=(h/24*100)+'%';
+      lbl.textContent=h;
+      labels.appendChild(lbl);
+    }
   }
   
   attachEventHandlers() {
@@ -658,73 +703,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     }
   }
   
-  renderAll() {
-    console.log("Rendering all days at time "+new Date().toLocaleTimeString());
-    this.dayOrder.forEach(day => this.renderDay(day));
-  }
   
-  renderDay(day) {
-    const container = this.querySelector(`#${day}`);
-    const ticker = this.querySelector(`#${day}-ticker`);
-    const labels = this.querySelector(`#${day}-ticker-labels`);
-    const slots = this.thermostatSchedule[day];
-    if(!container || !ticker || !labels) return;
-    
-    container.innerHTML = '';
-    if(slots.length===0) return;
-    
-    // Get previous day's last temperature
-    const dayIndex = this.dayOrder.indexOf(day);
-    const previousDay = this.dayOrder[(dayIndex - 1 + 7) % 7];
-    const previousDaySlots = this.thermostatSchedule[previousDay];
-    const previousDayLastTemp = previousDaySlots[previousDaySlots.length - 1].temp;
-    
-    // Build segments
-    const firstSlotTime = this.parseTimeToMinutes(slots[0].time);
-    
-    // Add initial segment if first slot doesn't start at midnight
-    if (firstSlotTime > 0) {
-      const initialDiv = document.createElement('div');
-      initialDiv.className = 'segment';
-      initialDiv.style.width = (firstSlotTime / 1440 * 100) + '%';
-      initialDiv.style.background = this.getColorForTemperature(previousDayLastTemp);
-      initialDiv.textContent = previousDayLastTemp + '°';
-      container.appendChild(initialDiv);
-    }
-    
-    // Build remaining segments
-    for(let i = 0; i < slots.length; i++) {
-      const current = slots[i];
-      const next = slots[i+1] || {time:'24:00'};
-      const startMins = this.parseTimeToMinutes(current.time);
-      const endMins = this.parseTimeToMinutes(next.time);
-      const widthPercent = ((endMins-startMins)/1440)*100;
-      const div = document.createElement('div');
-      div.className = 'segment';
-      div.style.width = widthPercent + '%';
-      div.style.background = this.getColorForTemperature(current.temp);
-      div.textContent = current.temp + '°';
-      container.appendChild(div);
-    }
-    
-    // Build tickers
-    ticker.innerHTML='';
-    labels.innerHTML='';
-    for(let i=0;i<96;i++){
-      const tick = document.createElement('div');
-      tick.className='tick';
-      if(i%4===0) tick.classList.add('hour');
-      if(i%12===0) tick.classList.add('major');
-      ticker.appendChild(tick);
-    }
-    for(let h=0;h<=24;h+=3){
-      const lbl = document.createElement('div');
-      lbl.className='tick-number';
-      lbl.style.left=(h/24*100)+'%';
-      lbl.textContent=h;
-      labels.appendChild(lbl);
-    }
-  }
   
   updateScheduleDisplay() {
     console.log("Updating schedule display at " + new Date().toLocaleTimeString());
@@ -760,79 +739,72 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
       const dayIndex = this.dayOrder.indexOf(day);
       const previousDay = this.dayOrder[(dayIndex - 1 + 7) % 7];
       const previousDaySlots = this.thermostatSchedule[previousDay];
-      const previousDayLastTemp = previousDaySlots[previousDaySlots.length - 1].temp;
-      
-      // Calculate first slot time
-      const firstSlotTime = slots.length > 0 ? this.parseTimeToMinutes(slots[0].time) : 0;
-      
-      // Update or create segments
-      let currentSegments = Array.from(segments);
-      
-      // Update/create initial segment if needed
-      if (firstSlotTime > 0) {
-        if (currentSegments[0]) {
+      // Find last valid temperature from previous day
+      let previousDayLastTemp = 0;
+      if (previousDaySlots && previousDaySlots.length > 0) {
+        for (let i = previousDaySlots.length - 1; i >= 0; i--) {
+          if (previousDaySlots[i].time !== '24:00') {
+            previousDayLastTemp = previousDaySlots[i].temp;
+            break;
+          }
+        }
+        
+        // Calculate first slot time
+        const firstSlotTime = slots.length > 0 ? this.parseTimeToMinutes(slots[0].time) : 0;
+        
+        // Update or create segments
+        let currentSegments = Array.from(segments);
+        
+        // Update/create initial segment if needed
+        if (firstSlotTime > 0) {
           // Update existing initial segment
+          currentSegments[0].style.display = 'flex'; // Ensure it's visible
           currentSegments[0].style.width = (firstSlotTime / 1440 * 100) + '%';
           currentSegments[0].style.background = this.getColorForTemperature(previousDayLastTemp);
           currentSegments[0].textContent = previousDayLastTemp + '°';
-        } else {
-          // Create new initial segment
-          const initialDiv = document.createElement('div');
-          initialDiv.className = 'segment';
-          initialDiv.style.width = (firstSlotTime / 1440 * 100) + '%';
-          initialDiv.style.background = this.getColorForTemperature(previousDayLastTemp);
-          initialDiv.textContent = previousDayLastTemp + '°';
-          container.appendChild(initialDiv);
         }
-        currentSegments = currentSegments.slice(1);
-      } else {
-        // If there's no initial segment but one exists in DOM, ensure we treat segments correctly
-        // leave currentSegments as-is (no slice)
-      }
-      
-      // Update remaining segments
-      slots.forEach((slot, i) => {
-        const next = slots[i + 1] || { time: '24:00' };
-        const startMins = this.parseTimeToMinutes(slot.time);
-        const endMins = this.parseTimeToMinutes(next.time);
-        const widthPercent = ((endMins - startMins) / 1440) * 100;
+        else{
+          currentSegments[0].style.display = 'none'; // Hide the initial segment if first slot is at 00:00
+        }
         
-        if (currentSegments[i]) {
-          // Update existing segment
-          currentSegments[i].style.width = widthPercent + '%';
-          currentSegments[i].style.background = this.getColorForTemperature(slot.temp);
-          currentSegments[i].textContent = slot.temp + '°';
-        } else {
-          // Create new segment if needed
-          const div = document.createElement('div');
-          div.className = 'segment';
-          div.style.width = widthPercent + '%';
-          div.style.background = this.getColorForTemperature(slot.temp);
-          div.textContent = slot.temp + '°';
-          container.appendChild(div);
-        }
-      });
-      
-      // Remove any excess segments
-      const totalSegmentsNeeded = slots.length + (firstSlotTime > 0 ? 1 : 0);
-      while (container.children.length > totalSegmentsNeeded) {
-        container.removeChild(container.lastChild);
-      }
-      
-      // Update editor fields if visible
-      const editor = this.querySelector(`#${day}-editor`);
-      if (editor && editor.classList.contains('visible')) {
+        
+        // Update remaining segments
         slots.forEach((slot, i) => {
-          const timeInput = this.querySelector(`#${day}-time-${i + 1}`);
-          const tempInput = this.querySelector(`#${day}-temp-${i + 1}`);
-          if (timeInput) timeInput.value = slot.time;
-          if (tempInput) tempInput.value = slot.temp;
+          const segmentIdx = i+1; // +1 to account for initial segment
+          const next = slots[i + 1] || { time: '24:00' };
+          const startMins = this.parseTimeToMinutes(slot.time);
+          const endMins = this.parseTimeToMinutes(next.time);
+          const widthPercent = ((endMins - startMins) / (60*24)) * 100; // Minutes this slot is active as a percentage of 24 hours
+          
+          // Update existing segment
+          if (slot.time === '24:00') {
+            // Hide segments for disabled slots
+            currentSegments[segmentIdx].style.display = 'none';
+          } 
+          else {
+            currentSegments[segmentIdx].style.display = 'flex'; // Ensure it's visible
+            currentSegments[segmentIdx].style.width = widthPercent + '%';
+            currentSegments[segmentIdx].style.background = this.getColorForTemperature(slot.temp);
+            currentSegments[segmentIdx].textContent = slot.temp + '°';
+          }
+          
         });
+        
+        // Update editor fields if visible
+        const editor = this.querySelector(`#${day}-editor`);
+        if (editor && editor.classList.contains('visible')) {
+          slots.forEach((slot, i) => {
+            const timeInput = this.querySelector(`#${day}-time-${i + 1}`);
+            const tempInput = this.querySelector(`#${day}-temp-${i + 1}`);
+            if (timeInput) timeInput.value = slot.time;
+            if (tempInput) tempInput.value = slot.temp;
+          });
+        }
+        
+        // Mark this day's schedule as rendered
+        this._lastRenderedSchedule[day] = currentSerialized;
+        console.log(`Updated display for ${day}`)
       }
-      
-      // Mark this day's schedule as rendered
-      this._lastRenderedSchedule[day] = currentSerialized;
-      console.log(`Updated display for ${day}`)
     });
   }
   
@@ -871,6 +843,9 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     }
     
     getColorForTemperature(temp) {
+      if (temp < 5) {
+        return '#a2a2a2'; // Indicates invalid temperature
+      }
       if (temp < 15) {
         return '#185fb6';
       }
@@ -883,7 +858,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
       if (temp >= 23) {
         return '#e53935';
       }
-      return '#fdd835';
+      return '#a2a2a2';
     }
     
     prefillEditor(day){
