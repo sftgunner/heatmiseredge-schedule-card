@@ -313,8 +313,8 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         .day-label { font-size:18px; font-weight:bold; }
         .progress-container { display:flex; height:40px; background:#f0f0f0; border-radius:4px; overflow:hidden; }
         .segment { display:flex; align-items:center; justify-content:center; font-weight:bold; color:white; transition: background-color 0.3s; }
-        .segment:not(:last-child) {
-        border-right: 2px solid #ffffff;}
+        .segment:not(:first-child) {
+        border-left: 2px solid #ffffff;}
         .ticker { display:flex; margin-top:6px; align-items:flex-end; height:12px; }
         .tick { width: calc(100% / 96); border-left:1px solid #bbb; height:6px; }
         .tick.hour { height:10px; border-left-color:#888; }
