@@ -223,6 +223,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     }
     
     this.updateScheduleDisplay();
+    this.updateTimeIndicator();  // Add this line
     
     // Update summary at top of page
     var entityState = this._hass.states[this.climateEntity];
@@ -297,10 +298,10 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     //   );
     // }
   }
-
+  
   render(){
-      this.renderFramework(); // Render framework
-      this.dayOrder.forEach(day => this.renderDay(day)); // Render individual days
+    this.renderFramework(); // Render framework
+    this.dayOrder.forEach(day => this.renderDay(day)); // Render individual days
   }
   
   renderFramework() {
@@ -311,7 +312,8 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         .day-row { margin: 16px 0; }
         .day-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
         .day-label { font-size:18px; font-weight:bold; }
-        .progress-container { display:flex; height:40px; background:#f0f0f0; border-radius:4px; overflow:hidden; }
+        .progress-container { position:relative; display:flex; height:40px; background:#f0f0f0; border-radius:4px; overflow:hidden; }
+        .current-time-indicator { position: absolute; top: 0; bottom: 0; width: 4px; background-color: #ff0000; z-index: 1; pointer-events: none; }
         .segment { display:flex; align-items:center; justify-content:center; font-weight:bold; color:white; transition: background-color 0.3s; }
         .segment:not(:first-child) {
         border-left: 2px solid #ffffff;}
@@ -804,6 +806,46 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         // Mark this day's schedule as rendered
         this._lastRenderedSchedule[day] = currentSerialized;
         console.log(`Updated display for ${day}`)
+      }
+    });
+  }
+  
+  updateTimeIndicator() {
+    const now = new Date();
+    const minutesSinceMidnight = now.getHours() * 60 + now.getMinutes();
+    const percentage = (minutesSinceMidnight / (24 * 60)) * 100;
+    
+    // Get current day name in lowercase
+    const currentDay = now.toLocaleString('en-gb', {  weekday: 'long' }).toLocaleLowerCase();
+    
+    // Handle different schedule modes
+    let containersToUpdate = [];
+    if (this.scheduleMode === '24 Hour') {
+      // In 24 hour mode, update all visible containers
+      containersToUpdate = this.dayOrder.map(day => this.querySelector(`#${day}`));
+    } else if (this.scheduleMode === 'Weekday/Weekend') {
+      if (['saturday', 'sunday'].includes(currentDay)) {
+        // Weekend - show on saturday container
+        containersToUpdate = [this.querySelector('#saturday')];
+      } else {
+        // Weekday - show on monday container
+        containersToUpdate = [this.querySelector('#monday')];
+      }
+    } else {
+      // 7 day mode - only show on current day
+      containersToUpdate = [this.querySelector(`#${currentDay}`)];
+    }
+    
+    // Remove existing indicators
+    this.querySelectorAll('.current-time-indicator').forEach(el => el.remove());
+    
+    // Add new indicators
+    containersToUpdate.forEach(container => {
+      if (container) {
+        const indicator = document.createElement('div');
+        indicator.className = 'current-time-indicator';
+        indicator.style.left = `${percentage}%`;
+        container.appendChild(indicator);
       }
     });
   }
