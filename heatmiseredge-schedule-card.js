@@ -8,43 +8,57 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         { time: '05:00', temp: 0 },
         { time: '08:30', temp: 0 },
         { time: '19:30', temp: 0 },
-        { time: '21:30', temp: 0 }
+        { time: '21:30', temp: 0 },
+        { time: '24:00', temp: 0 },
+        { time: '24:00', temp: 0 }
       ],
       tuesday: [
         { time: '05:00', temp: 0 },
         { time: '08:30', temp: 0 },
         { time: '19:30', temp: 0 },
-        { time: '21:30', temp: 0 }
+        { time: '21:30', temp: 0 },
+        { time: '24:00', temp: 0 },
+        { time: '24:00', temp: 0 }
       ],
       wednesday: [
         { time: '05:00', temp: 0 },
         { time: '08:30', temp: 0 },
         { time: '19:30', temp: 0 },
-        { time: '21:30', temp: 0 }
+        { time: '21:30', temp: 0 },
+        { time: '24:00', temp: 0 },
+        { time: '24:00', temp: 0 }
       ],
       thursday: [
         { time: '05:00', temp: 0 },
         { time: '08:30', temp: 0 },
         { time: '19:30', temp: 0 },
-        { time: '21:30', temp: 0 }
+        { time: '21:30', temp: 0 },
+        { time: '24:00', temp: 0 },
+        { time: '24:00', temp: 0 }
       ],
       friday: [
         { time: '05:00', temp: 14 },
         { time: '08:30', temp: 21 },
         { time: '19:30', temp: 19 },
-        { time: '21:30', temp: 16 }
+        { time: '21:30', temp: 16 },
+        { time: '24:00', temp: 0 },
+        { time: '24:00', temp: 0 }
       ],
       saturday: [
         { time: '05:00', temp: 0 },
         { time: '08:30', temp: 0 },
         { time: '19:30', temp: 0 },
-        { time: '21:30', temp: 0 }
+        { time: '21:30', temp: 0 },
+        { time: '24:00', temp: 0 },
+        { time: '24:00', temp: 0 }
       ],
       sunday: [
         { time: '05:00', temp: 0 },
         { time: '08:30', temp: 0 },
         { time: '19:30', temp: 0 },
-        { time: '21:30', temp: 0 }
+        { time: '21:30', temp: 0 },
+        { time: '24:00', temp: 0 },
+        { time: '24:00', temp: 0 }
       ]
     };
     // Default period values (24:00, 0min, 16degC, 0)
@@ -176,14 +190,15 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     });
     
     // console.log('Converted register values:', this.thermostatScheduleRegister);
-    console.log(this.thermostatScheduleRegister);
+    // console.log(this.thermostatScheduleRegister);
     return this.thermostatScheduleRegister;
   }
   
   updateContent(content, firstRender) {
     const deviceId = this.config.device;
-    const previousScheduleModeState = this.getEntityState(this.ScheduleMode)
-    this.scheduleMode = this.findEntityFromDevice(deviceId,"select.","_schedule_mode");
+    this.activeDeviceId = deviceId; // Select the active device
+    const previousScheduleModeState = this.scheduleMode;
+    this.scheduleMode = this.getEntityState(this.findEntityFromDevice(deviceId,"select.","_schedule_mode"));
     this.climateEntity = this.findEntityFromDevice(deviceId,"climate.","_thermostat");
     
     if (!this.climateEntity) {
@@ -197,10 +212,10 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
       return;
     }
     
-    this.readScheduleFromDevice();
+    this.readScheduleFromDevice(this.activeDeviceId);
     
     // Check if schedule mode has changed
-    const scheduleModeChanged = previousScheduleModeState !== this.scheduleMode.state;
+    const scheduleModeChanged = previousScheduleModeState !== this.scheduleMode;
     
     if (firstRender || scheduleModeChanged){
       this.render();
@@ -220,7 +235,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     // content.querySelector('.entity-mode').textContent = `Current: ${temp}°C (${state})`;
   }
   
-  readScheduleFromDevice() {
+  readScheduleFromDevice(deviceId=this.activeDeviceId) {
     const entityId = this.climateEntity;
     if (!entityId || !this._hass) return;
     
@@ -239,27 +254,35 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     // Iterate through each day
     for (const [shortDay, fullDay] of Object.entries(dayMap)) {
       // Iterate through 4 periods per day
-      for (let period = 1; period <= 4; period++) {
+      for (let period = 1; period <= 6; period++) {
         // Construct entity IDs for temperature and time
-        const tempEntityId = `${baseTempEntityId}_${shortDay}_period${period}_temp`;
-        const timeEntityId = `${baseTimeEntityId}_${shortDay}_period${period}_starttime`;
+        const tempEntityId = this.findEntityFromDevice(deviceId, "number.", `_${shortDay}_period${period}_temp`);
+        const timeEntityId = this.findEntityFromDevice(deviceId, "time.", `_${shortDay}_period${period}_starttime`);
         
         // Get states
-        const tempState = this._hass.states[tempEntityId];
-        const timeState = this._hass.states[timeEntityId];
+        const tempState = this.getEntityState(tempEntityId);
+        const timeState = this.getEntityState(timeEntityId,"unknown");
+        
+        console.log(`Reading ${fullDay} Period ${period}: Temp Entity: ${tempState}, Time Entity: ${timeState}`);
         
         if (tempState && timeState) {
           // Convert time from minutes since midnight to HH:MM format
-          const timeStateSplit = timeState.state.split(':');
-          const hours = parseInt(timeStateSplit[0]);
-          const minutes = parseInt(timeStateSplit[1]);
-          const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+          let timeString;
+          if (timeState == "unknown") {
+            timeString = "24:00"; // Heatmiser register stores disabled time slots as 24:00
+          }
+          else {
+            const timeStateSplit = timeState.split(':');
+            const hours = parseInt(timeStateSplit[0]);
+            const minutes = parseInt(timeStateSplit[1]);
+            timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+          }
           
           // Update the schedule
           if (this.thermostatSchedule[fullDay] && this.thermostatSchedule[fullDay][period - 1]) {
             this.thermostatSchedule[fullDay][period - 1] = {
               time: timeString,
-              temp: parseFloat(tempState.state)
+              temp: parseFloat(tempState)
             };
           }
         }
@@ -339,9 +362,8 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
           </div>
         </div>
     `;
-    const scheduleMode = this.getScheduleMode();
     let visibleDays;
-    if (scheduleMode === 'Weekday/Weekend') {
+    if (this.scheduleMode === 'Weekday/Weekend') {
       visibleDays = ['friday', 'saturday']; // Default is using friday for weekdays, and saturday for weekends
     } else {
       visibleDays = this.dayOrder;
@@ -349,7 +371,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     
     visibleDays.forEach(day => {
       let displayName;
-      if (scheduleMode === 'Weekday/Weekend') {
+      if (this.scheduleMode === 'Weekday/Weekend') {
         if (day === 'friday') {
           displayName = 'Weekdays';
         } else {
@@ -388,10 +410,10 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
               </div>`).join('')}
             </div>
             <div class="actions">
-              ${scheduleMode === '24 Hour' ? `
+              ${this.scheduleMode === '24 Hour' ? `
                 <ha-button class="apply" id="${day}-apply-all" size="small" appearance="filled">Apply all</ha-button>
                 <ha-button class="cancel" id="${day}-cancel" size="small">Cancel</ha-button>
-              ` : scheduleMode === 'Weekday/Weekend' ? `
+              ` : this.scheduleMode === 'Weekday/Weekend' ? `
                 <ha-button class="apply" id="${day}-apply-group" size="small" appearance="filled">Apply ${['saturday', 'sunday'].includes(day) ? 'weekends' : 'weekdays'}</ha-button>
                 <ha-button class="apply" id="${day}-apply-all" size="small" appearance="filled">Apply all</ha-button>
                 <ha-button class="cancel" id="${day}-cancel" size="small">Cancel</ha-button>
@@ -418,14 +440,13 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     const refreshBtn = this.querySelector('.refresh-btn');
     if(refreshBtn) {
       refreshBtn.addEventListener('click', () => {
-        this.readScheduleFromDevice();
+        this.readScheduleFromDevice(this.activeDeviceId);
         this.updateScheduleDisplay();
       });
     }
     
-    const scheduleMode = this.getScheduleMode();
     let visibleDays;
-    if (scheduleMode === 'Weekday/Weekend') {
+    if (this.scheduleMode === 'Weekday/Weekend') {
       visibleDays = ['monday', 'saturday'];
     } else {
       visibleDays = this.dayOrder;
@@ -467,11 +488,11 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
       }
       
       // Apply button handlers based on schedule mode
-      if (scheduleMode === '24 Hour') {
+      if (this.scheduleMode === '24 Hour') {
         if(applyAllBtn) {
           applyAllBtn.addEventListener('click', (e) => { e.stopPropagation(); this.applySchedule(day, 'all'); });
         }
-      } else if (scheduleMode === 'Weekday/Weekend') {
+      } else if (this.scheduleMode === 'Weekday/Weekend') {
         if(applyGroupBtn) {
           applyGroupBtn.addEventListener('click', (e) => { e.stopPropagation(); this.applySchedule(day, 'group'); });
         }
@@ -629,7 +650,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
       
       // Wait for writes to complete before refreshing
       setTimeout(() => {
-        this.readScheduleFromDevice();
+        this.readScheduleFromDevice(this.activeDeviceId);
         this.updateScheduleDisplay();
       }, 2000);
     } catch (error) {
@@ -708,9 +729,8 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
   updateScheduleDisplay() {
     console.log("Updating schedule display at " + new Date().toLocaleTimeString());
     
-    const scheduleMode = this.getScheduleMode();
     let visibleDays;
-    if (scheduleMode === 'Weekday/Weekend') {
+    if (this.scheduleMode === 'Weekday/Weekend') {
       visibleDays = ['monday', 'saturday'];
     } else {
       visibleDays = this.dayOrder;
@@ -819,118 +839,107 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
   // Add this helper function after the constructor
   async writeRegisters(registerStart, values, isLastWrite = true) {
     await this._hass.callService('heatmiser_edge', 'write_register_range', {
-      device_id: ['4e03fdc94f493c4af45a120ad23013e5'],
+      device_id: [this.activeDeviceId],
       register: registerStart,
       values: values.join(','),
       refresh_values_after_writing: isLastWrite
     });
   }
+  
+  findEntityFromDevice(deviceId, startsWith="climate.", includes="thermostat") {
+    if (!this._hass || !deviceId) {
+      return null;
+    }
     
-    findEntityFromDevice(deviceId, startsWith="climate.", includes="thermostat") {
-      if (!this._hass || !deviceId) {
-        return null;
-      }
-      
-      const entities = this._hass.entities || {};
-      
-      for (const [entityId, entity] of Object.entries(entities)) {
-        if (entity.device_id === deviceId && 
-          entityId.startsWith(startsWith) && 
-          entityId.includes(includes)) {
-            return entityId;
-          }
+    const entities = this._hass.entities || {};
+    
+    for (const [entityId, entity] of Object.entries(entities)) {
+      if (entity.device_id === deviceId && 
+        entityId.startsWith(startsWith) && 
+        entityId.includes(includes)) {
+          return entityId;
         }
       }
-        
-        setConfig(config) {
-          console.log("Setting config");
-          if (!config.device) {
-            throw new Error("You need to define a device");
-          }
-          this.config = config;
+    }
+    
+    setConfig(config) {
+      console.log("Setting config");
+      if (!config.device) {
+        throw new Error("You need to define a device");
+      }
+      this.config = config;
+    }
+    
+    getColorForTemperature(temp) {
+      if (temp < 15) {
+        return '#185fb6';
+      }
+      if (temp < 19) {
+        return '#00bcd4';
+      }
+      if (temp < 23) {
+        return '#ffc107';
+      }
+      if (temp >= 23) {
+        return '#e53935';
+      }
+      return '#fdd835';
+    }
+    
+    prefillEditor(day){
+      for(let i=1;i<=4;i++){
+        const entry = this.thermostatSchedule[day][i-1];
+        if(entry){
+          this.querySelector(`#${day}-time-${i}`).value = entry.time;
+          this.querySelector(`#${day}-temp-${i}`).value = entry.temp;
         }
-        
-        getColorForTemperature(temp) {
-          if (temp < 15) {
-            return '#185fb6';
-          }
-          if (temp < 19) {
-            return '#00bcd4';
-          }
-          if (temp < 23) {
-            return '#ffc107';
-          }
-          if (temp >= 23) {
-            return '#e53935';
-          }
-          return '#fdd835';
-        }
-        
-        prefillEditor(day){
-          for(let i=1;i<=4;i++){
-            const entry = this.thermostatSchedule[day][i-1];
-            if(entry){
-              this.querySelector(`#${day}-time-${i}`).value = entry.time;
-              this.querySelector(`#${day}-temp-${i}`).value = entry.temp;
-            }
-          }
-        }
-        
-        parseTimeToMinutes(time) {
-          const [hh, mm] = time.split(':').map(Number);
-          return hh * 60 + mm;
-        }
-        
-        getRegisterValuesFromInputs(day) {
-          const registerValues = [];
+      }
+    }
+    
+    parseTimeToMinutes(time) {
+      const [hh, mm] = time.split(':').map(Number);
+      return hh * 60 + mm;
+    }
+    
+    getRegisterValuesFromInputs(day) {
+      const registerValues = [];
+      
+      // Get all periods (up to 6)
+      for(let i=1; i<=6; i++) {
+        if(i <= 4) {
+          const timeInput = this.querySelector(`#${day}-time-${i}`);
+          const tempInput = this.querySelector(`#${day}-temp-${i}`);
           
-          // Get all periods (up to 6)
-          for(let i=1; i<=6; i++) {
-            if(i <= 4) {
-              const timeInput = this.querySelector(`#${day}-time-${i}`);
-              const tempInput = this.querySelector(`#${day}-temp-${i}`);
-              
-              if(timeInput?.value && tempInput?.value) {
-                const [hours, minutes] = timeInput.value.split(':').map(Number);
-                const temp = Math.round(parseFloat(tempInput.value) * 10);
-                registerValues.push(hours, minutes, temp, 0);
-              }
-            } else {
-              // Add default values for periods 5-6
-              registerValues.push(24, 0, 160, 0);
-            }
+          if(timeInput?.value && tempInput?.value) {
+            const [hours, minutes] = timeInput.value.split(':').map(Number);
+            const temp = Math.round(parseFloat(tempInput.value) * 10);
+            registerValues.push(hours, minutes, temp, 0);
           }
-          
-          return registerValues;
-        }
-        
-        getScheduleMode() {
-          const modeState = this._hass.states[this.scheduleMode];
-          console.log(`Schedule mode entity: ${this.scheduleMode}, state: ${modeState?.state}`);
-          
-          if (modeState && modeState.state) {
-            return modeState.state;
-          } else {
-            return 'Full Week';
-          }
-        }
-        
-        getEntityState(entityId,defaultValue=null) {
-          const entity = this._hass.states[entityId];
-          if (entity) {
-            return entity.state;
-          }
-          return defaultValue;
+        } else {
+          // Add default values for periods 5-6
+          registerValues.push(24, 0, 160, 0);
         }
       }
       
-      customElements.define('heatmiseredge-schedule-card', HeatmiserEdgeScheduleCard);
-      window.customCards = window.customCards || [];
-      window.customCards.push({
-        type: "heatmiseredge-schedule-card",
-        name: "Heatmiser Edge schedule card",
-        preview: false, // Optional - defaults to false
-        description: "Allows you to easily modify the schedules on your Heatmiser edge thermostats", // Optional
-        documentationURL:
-        "https://github.com/sftgunner/heatmiseredge-schedule-card", // Adds a help link in the frontend card editor
-      });
+      return registerValues;
+    }
+    
+    getEntityState(entityId,defaultValue=null) {
+      const entity = this._hass.states[entityId];
+      if (entity) {
+        return entity.state;
+      }
+      return defaultValue;
+    }
+  }
+  
+  customElements.define('heatmiseredge-schedule-card', HeatmiserEdgeScheduleCard);
+  window.customCards = window.customCards || [];
+  window.customCards.push({
+    type: "heatmiseredge-schedule-card",
+    name: "Heatmiser Edge schedule card",
+    preview: false, // Optional - defaults to false
+    description: "Allows you to easily modify the schedules on your Heatmiser edge thermostats", // Optional
+    documentationURL:
+    "https://github.com/sftgunner/heatmiseredge-schedule-card", // Adds a help link in the frontend card editor
+  });
