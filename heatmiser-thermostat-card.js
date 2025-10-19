@@ -285,7 +285,6 @@ class HeatmiserThermostatCard extends HTMLElement {
         .day-row { margin: 16px 0; }
         .day-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
         .day-label { font-size:18px; font-weight:bold; }
-        .edit-btn { padding:4px 8px; font-size:12px; cursor:pointer; border:1px solid #ccc; border-radius:4px; }
         .progress-container { display:flex; height:40px; background:#f0f0f0; border-radius:4px; overflow:hidden; }
         .segment { display:flex; align-items:center; justify-content:center; font-weight:bold; color:white; transition: background-color 0.3s; }
         .segment:not(:last-child) {
@@ -299,7 +298,7 @@ class HeatmiserThermostatCard extends HTMLElement {
         .day-editor { display:none; padding:8px 0 0 0; }
         .day-editor.visible { display:block; }
         .fields { display:grid; grid-template-columns:1fr; gap:10px; margin-bottom:10px; }
-        .slot-pair { display:grid; grid-template-columns:auto 1fr auto 1fr; gap:6px 10px; align-items:center; padding:8px; border:1px solid #e6e6e6; border-radius:8px; background-old:#fafafa; }
+        .slot-pair { display:grid; grid-template-columns:auto 1fr auto 1fr; gap:6px 10px; align-items:center; padding:8px; border:2px solid var(--primary-color); border-radius:8px; background-old:#fafafa; background: var(--secondary-color); }
         .slot-label { grid-column:1 / -1; margin-bottom:4px; color:#666; font-size:12px; }
         .day-editor input[type="time"], .day-editor input[type="number"] { padding:6px 8px; border-radius:4px; border:1px solid #ccc; font-size:14px; }
         .controls { display:flex; align-items:center; gap:6px; }
@@ -331,12 +330,13 @@ class HeatmiserThermostatCard extends HTMLElement {
               <div class="entity-id"></div>
               <div class="entity-state">Loading...</div>
               <div class="last-update">Last updated: Never</div>
+    
             </div>
-            <button class="refresh-btn" style="padding: 8px 12px; border-radius: 4px; border: 1px solid #ccc; cursor: pointer;">
+            <ha-button appearance="filled" size="medium" class="refresh-btn">
               <svg style="width: 16px; height: 16px;" viewBox="0 0 24 24">
                 <path fill="currentColor" d="M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z"/>
               </svg>
-            </button>
+            </ha-button>
           </div>
         </div>
     `;
@@ -364,7 +364,7 @@ class HeatmiserThermostatCard extends HTMLElement {
         <div class="day-row" data-day="${day}">
           <div class="day-header">
             <div class="day-label">${displayName}</div>
-            <button class="edit-btn" data-edit="${day}">Edit</button>
+            <ha-button class="edit-btn" data-edit="${day}" size="small">Edit</ha-button>
           </div>
           <div class="progress-container" id="${day}"></div>
           <div class="ticker" id="${day}-ticker"></div>
@@ -447,9 +447,13 @@ attachEventHandlers() {
     
     // Basic editor toggle handlers
     if(editBtn) {
-      editBtn.addEventListener('click', () => {
-        editor.classList.toggle('visible');
-        this.prefillEditor(day);
+      editBtn.addEventListener('click', (e) => {
+        e.stopPropagation();  // Stop event bubbling
+        const editor = this.querySelector(`#${day}-editor`);
+        if (editor) {
+          editor.classList.toggle('visible');
+          this.prefillEditor(day);
+        }
       });
     }
     
@@ -589,7 +593,7 @@ adjustTempInput(inputId, delta) {
   // Optionally, if you want to push changes to Home Assistant number entities, call updateNumberValue here
   // e.g. this.updateNumberValue(numberEntityId, newVal);
 }
- 
+
 async applySchedule(day, type = 'single') {
   const editor = this.querySelector(`#${day}-editor`);
   const registerValues = this.getRegisterValuesFromInputs(day);
