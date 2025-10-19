@@ -383,28 +383,24 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
                 <div class="controls">
                   <label>Temp</label>
                   <button class="btn-dec" id="${day}-temp-${i}-dec">-</button>
-                  <input type="number" id="${day}-temp-${i}" min="5" max="35" step="0.5">
+                  <input type="number" id="${day}-temp-${i}" min="5" max="35" step="1">
                   <button class="btn-inc" id="${day}-temp-${i}-inc">+</button>
                 </div>
               </div>`).join('')}
             </div>
             <div class="actions">
               ${scheduleMode === '24 Hour' ? `
-                <button class="apply" id="${day}-apply-all">Apply all</button>
-                <button class="cancel" id="${day}-cancel">Cancel</button>
+                <ha-button class="apply" id="${day}-apply-all" size="small" appearance="filled">Apply all</ha-button>
+                <ha-button class="cancel" id="${day}-cancel" size="small">Cancel</ha-button>
               ` : scheduleMode === 'Weekday/Weekend' ? `
-                <button class="apply" id="${day}-apply-group">Apply ${
-      ['saturday', 'sunday'].includes(day) ? 'weekends' : 'weekdays'
-    }</button>
-                <button class="apply" id="${day}-apply-all">Apply all</button>
-                <button class="cancel" id="${day}-cancel">Cancel</button>
+                <ha-button class="apply" id="${day}-apply-group" size="small" appearance="filled">Apply ${['saturday', 'sunday'].includes(day) ? 'weekends' : 'weekdays'}</ha-button>
+                <ha-button class="apply" id="${day}-apply-all" size="small" appearance="filled">Apply all</ha-button>
+                <ha-button class="cancel" id="${day}-cancel" size="small">Cancel</ha-button>
               ` : `
-                <button class="apply" id="${day}-apply">Apply</button>
-                <button class="apply" id="${day}-apply-group">Apply ${
-    ['saturday', 'sunday'].includes(day) ? 'weekends' : 'weekdays'
-  }</button>
-                <button class="apply" id="${day}-apply-all">Apply all</button>
-                <button class="cancel" id="${day}-cancel">Cancel</button>
+                <ha-button class="apply" id="${day}-apply" size="small" appearance="filled">Apply</ha-button>
+                <ha-button class="apply" id="${day}-apply-group" size="small" appearance="filled">Apply ${['saturday', 'sunday'].includes(day) ? 'weekends' : 'weekdays'}</ha-button>
+                <ha-button class="apply" id="${day}-apply-all" size="small" appearance="filled">Apply all</ha-button>
+                <ha-button class="cancel" id="${day}-cancel" size="small">Cancel</ha-button>
               `}
             </div>
           </div>
@@ -460,11 +456,11 @@ attachEventHandlers() {
     if(row) {
       row.addEventListener('click', e => {
         // Do not toggle editor if the click originated inside the editor itself,
-        // or if it was on a button/input (those have their own handlers).
+        // or if it was on a button/input/ha-button (those have their own handlers).
         if (e.target.closest('.day-editor')) {
           return;
         }
-        if(!e.target.closest('button') && !e.target.closest('input')) {
+        if(!e.target.closest('button') && !e.target.closest('ha-button') && !e.target.closest('input')) {
           editor.classList.toggle('visible');
           this.prefillEditor(day);
         }
@@ -474,33 +470,31 @@ attachEventHandlers() {
     // Apply button handlers based on schedule mode
     if (scheduleMode === '24 Hour') {
       if(applyAllBtn) {
-        applyAllBtn.addEventListener('click', () => this.applySchedule(day, 'all'));
+        applyAllBtn.addEventListener('click', (e) => { e.stopPropagation(); this.applySchedule(day, 'all'); });
       }
     } else if (scheduleMode === 'Weekday/Weekend') {
       if(applyGroupBtn) {
-        applyGroupBtn.addEventListener('click', () => this.applySchedule(day, 'group'));
+        applyGroupBtn.addEventListener('click', (e) => { e.stopPropagation(); this.applySchedule(day, 'group'); });
       }
       if(applyAllBtn) {
-        applyAllBtn.addEventListener('click', () => this.applySchedule(day, 'all'));
+        applyAllBtn.addEventListener('click', (e) => { e.stopPropagation(); this.applySchedule(day, 'all'); });
       }
     } else {
       // 7 Day mode
       if(applyBtn) {
-        applyBtn.addEventListener('click', () => this.applySchedule(day, 'single'));
+        applyBtn.addEventListener('click', (e) => { e.stopPropagation(); this.applySchedule(day, 'single'); });
       }
       if(applyGroupBtn) {
-        applyGroupBtn.addEventListener('click', () => this.applySchedule(day, 'group'));
+        applyGroupBtn.addEventListener('click', (e) => { e.stopPropagation(); this.applySchedule(day, 'group'); });
       }
       if(applyAllBtn) {
-        applyAllBtn.addEventListener('click', () => this.applySchedule(day, 'all'));
+        applyAllBtn.addEventListener('click', (e) => { e.stopPropagation(); this.applySchedule(day, 'all'); });
       }
     }
     
     // Cancel button handler
     if(cancelBtn) {
-      cancelBtn.addEventListener('click', () => {
-        editor.classList.remove('visible');
-      });
+      cancelBtn.addEventListener('click', (e) => { e.stopPropagation(); editor.classList.remove('visible'); });
     }
     
     // +/- buttons for time/temp controls: both should adjust the start time by ±30min
@@ -522,17 +516,17 @@ attachEventHandlers() {
           this.adjustStartTimeInput(`${day}-time-${i}`, -30);
         });
       }
-      // temp +/- now change the temperature value (±0.5°C) instead of the start time
+      // temp +/- now change the temperature value (±1degC) instead of the start time
       if (tempInc) {
         tempInc.addEventListener('click', (ev) => {
           ev.stopPropagation();
-          this.adjustTempInput(`${day}-temp-${i}`, 0.5);
+          this.adjustTempInput(`${day}-temp-${i}`, 1);
         });
       }
       if (tempDec) {
         tempDec.addEventListener('click', (ev) => {
           ev.stopPropagation();
-          this.adjustTempInput(`${day}-temp-${i}`, -0.5);
+          this.adjustTempInput(`${day}-temp-${i}`, -1);
         });
       }
     }
@@ -571,7 +565,7 @@ adjustTempInput(inputId, delta) {
   if (!input) return;
   const min = parseFloat(input.getAttribute('min')) || -Infinity;
   const max = parseFloat(input.getAttribute('max')) || Infinity;
-  const step = parseFloat(input.getAttribute('step')) || 0.5;
+  const step = parseFloat(input.getAttribute('step')) || 1;
   let val = parseFloat(input.value);
   if (Number.isNaN(val)) {
     // if empty, initialize to min or 0
