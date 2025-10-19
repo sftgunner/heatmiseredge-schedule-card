@@ -183,8 +183,8 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
   updateContent(content, firstRender) {
     const deviceId = this.config.device;
     const previousScheduleModeState = this.getEntityState(this.ScheduleMode)
-    this.scheduleMode = this.findScheduleModeEntityFromDevice(deviceId);
-    this.climateEntity = this.findClimateEntityFromDevice(deviceId);
+    this.scheduleMode = this.findEntityFromDevice(deviceId,"select.","_schedule_mode");
+    this.climateEntity = this.findEntityFromDevice(deviceId,"climate.","_thermostat");
     
     if (!this.climateEntity) {
       content.innerHTML = `
@@ -198,7 +198,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     }
     
     this.readScheduleFromDevice();
-
+    
     // Check if schedule mode has changed
     const scheduleModeChanged = previousScheduleModeState !== this.scheduleMode.state;
     
@@ -404,555 +404,533 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
             </div>
           </div>
         </div>`;
-});
-htmlContent += `</div>`;
-this.content.innerHTML = style + htmlContent;
-
-this.attachEventHandlers();
-}
-
-attachEventHandlers() {
-  console.log("Attaching event handlers");
+    });
+    htmlContent += `</div>`;
+    this.content.innerHTML = style + htmlContent;
+    
+    this.attachEventHandlers();
+  }
   
-  // Add refresh button handler
-  const refreshBtn = this.querySelector('.refresh-btn');
-  if(refreshBtn) {
-    refreshBtn.addEventListener('click', () => {
-      this.readScheduleFromDevice();
-      this.updateScheduleDisplay();
+  attachEventHandlers() {
+    console.log("Attaching event handlers");
+    
+    // Add refresh button handler
+    const refreshBtn = this.querySelector('.refresh-btn');
+    if(refreshBtn) {
+      refreshBtn.addEventListener('click', () => {
+        this.readScheduleFromDevice();
+        this.updateScheduleDisplay();
+      });
+    }
+    
+    const scheduleMode = this.getScheduleMode();
+    let visibleDays;
+    if (scheduleMode === 'Weekday/Weekend') {
+      visibleDays = ['monday', 'saturday'];
+    } else {
+      visibleDays = this.dayOrder;
+    }
+    
+    visibleDays.forEach(day => {
+      const row = this.querySelector(`.day-row[data-day="${day}"]`);
+      const editor = this.querySelector(`#${day}-editor`);
+      const editBtn = this.querySelector(`.edit-btn[data-edit="${day}"]`);
+      const applyBtn = this.querySelector(`#${day}-apply`);
+      const applyGroupBtn = this.querySelector(`#${day}-apply-group`);
+      const applyAllBtn = this.querySelector(`#${day}-apply-all`);
+      const cancelBtn = this.querySelector(`#${day}-cancel`);
+      
+      // Basic editor toggle handlers
+      if(editBtn) {
+        editBtn.addEventListener('click', (e) => {
+          e.stopPropagation();  // Stop event bubbling
+          const editor = this.querySelector(`#${day}-editor`);
+          if (editor) {
+            editor.classList.toggle('visible');
+            this.prefillEditor(day);
+          }
+        });
+      }
+      
+      if(row) {
+        row.addEventListener('click', e => {
+          // Do not toggle editor if the click originated inside the editor itself,
+          // or if it was on a button/input/ha-button (those have their own handlers).
+          if (e.target.closest('.day-editor')) {
+            return;
+          }
+          if(!e.target.closest('button') && !e.target.closest('ha-button') && !e.target.closest('input')) {
+            editor.classList.toggle('visible');
+            this.prefillEditor(day);
+          }
+        });
+      }
+      
+      // Apply button handlers based on schedule mode
+      if (scheduleMode === '24 Hour') {
+        if(applyAllBtn) {
+          applyAllBtn.addEventListener('click', (e) => { e.stopPropagation(); this.applySchedule(day, 'all'); });
+        }
+      } else if (scheduleMode === 'Weekday/Weekend') {
+        if(applyGroupBtn) {
+          applyGroupBtn.addEventListener('click', (e) => { e.stopPropagation(); this.applySchedule(day, 'group'); });
+        }
+        if(applyAllBtn) {
+          applyAllBtn.addEventListener('click', (e) => { e.stopPropagation(); this.applySchedule(day, 'all'); });
+        }
+      } else {
+        // 7 Day mode
+        if(applyBtn) {
+          applyBtn.addEventListener('click', (e) => { e.stopPropagation(); this.applySchedule(day, 'single'); });
+        }
+        if(applyGroupBtn) {
+          applyGroupBtn.addEventListener('click', (e) => { e.stopPropagation(); this.applySchedule(day, 'group'); });
+        }
+        if(applyAllBtn) {
+          applyAllBtn.addEventListener('click', (e) => { e.stopPropagation(); this.applySchedule(day, 'all'); });
+        }
+      }
+      
+      // Cancel button handler
+      if(cancelBtn) {
+        cancelBtn.addEventListener('click', (e) => { e.stopPropagation(); editor.classList.remove('visible'); });
+      }
+      
+      // +/- buttons for time/temp controls: both should adjust the start time by ±30min
+      for (let i = 1; i <= 4; i++) {
+        const timeInc = this.querySelector(`#${day}-time-${i}-inc`);
+        const timeDec = this.querySelector(`#${day}-time-${i}-dec`);
+        const tempInc = this.querySelector(`#${day}-temp-${i}-inc`);
+        const tempDec = this.querySelector(`#${day}-temp-${i}-dec`);
+        
+        if (timeInc) {
+          timeInc.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            this.adjustStartTimeInput(`${day}-time-${i}`, 30);
+          });
+        }
+        if (timeDec) {
+          timeDec.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            this.adjustStartTimeInput(`${day}-time-${i}`, -30);
+          });
+        }
+        // temp +/- now change the temperature value (±1degC) instead of the start time
+        if (tempInc) {
+          tempInc.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            this.adjustTempInput(`${day}-temp-${i}`, 1);
+          });
+        }
+        if (tempDec) {
+          tempDec.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            this.adjustTempInput(`${day}-temp-${i}`, -1);
+          });
+        }
+      }
     });
   }
   
-  const scheduleMode = this.getScheduleMode();
-  let visibleDays;
-  if (scheduleMode === 'Weekday/Weekend') {
-    visibleDays = ['monday', 'saturday'];
-  } else {
-    visibleDays = this.dayOrder;
+  // Helper: adjust a time input by deltaMinutes, clamp 00:00..23:30
+  adjustStartTimeInput(inputId, deltaMinutes) {
+    const input = this.querySelector(`#${inputId}`);
+    if (!input) return;
+    let val = input.value;
+    if (!val) {
+      val = '00:00';
+    }
+    // Normalize "HH:MM" (ignore possible seconds)
+    const parts = val.split(':');
+    let hh = parseInt(parts[0], 10) || 0;
+    let mm = parseInt(parts[1], 10) || 0;
+    let total = hh * 60 + mm;
+    total += deltaMinutes;
+    if (total < 0) total = 0;
+    const maxTotal = 23 * 60 + 30; // 23:30
+    if (total > maxTotal) total = maxTotal;
+    const newH = Math.floor(total / 60).toString().padStart(2, '0');
+    const newM = (total % 60).toString().padStart(2, '0');
+    const newVal = `${newH}:${newM}`;
+    input.value = newVal;
+    // If there's a corresponding time entity to update, call updateTimeValue
+    // Try to infer entity id pattern: if input id corresponds to config device mapping we use updateTimeValue
+    // For safety we do not auto-call HA services here unless time entities are mapped elsewhere.
   }
   
-  visibleDays.forEach(day => {
-    const row = this.querySelector(`.day-row[data-day="${day}"]`);
-    const editor = this.querySelector(`#${day}-editor`);
-    const editBtn = this.querySelector(`.edit-btn[data-edit="${day}"]`);
-    const applyBtn = this.querySelector(`#${day}-apply`);
-    const applyGroupBtn = this.querySelector(`#${day}-apply-group`);
-    const applyAllBtn = this.querySelector(`#${day}-apply-all`);
-    const cancelBtn = this.querySelector(`#${day}-cancel`);
-    
-    // Basic editor toggle handlers
-    if(editBtn) {
-      editBtn.addEventListener('click', (e) => {
-        e.stopPropagation();  // Stop event bubbling
-        const editor = this.querySelector(`#${day}-editor`);
-        if (editor) {
-          editor.classList.toggle('visible');
-          this.prefillEditor(day);
-        }
-      });
-    }
-    
-    if(row) {
-      row.addEventListener('click', e => {
-        // Do not toggle editor if the click originated inside the editor itself,
-        // or if it was on a button/input/ha-button (those have their own handlers).
-        if (e.target.closest('.day-editor')) {
-          return;
-        }
-        if(!e.target.closest('button') && !e.target.closest('ha-button') && !e.target.closest('input')) {
-          editor.classList.toggle('visible');
-          this.prefillEditor(day);
-        }
-      });
-    }
-    
-    // Apply button handlers based on schedule mode
-    if (scheduleMode === '24 Hour') {
-      if(applyAllBtn) {
-        applyAllBtn.addEventListener('click', (e) => { e.stopPropagation(); this.applySchedule(day, 'all'); });
-      }
-    } else if (scheduleMode === 'Weekday/Weekend') {
-      if(applyGroupBtn) {
-        applyGroupBtn.addEventListener('click', (e) => { e.stopPropagation(); this.applySchedule(day, 'group'); });
-      }
-      if(applyAllBtn) {
-        applyAllBtn.addEventListener('click', (e) => { e.stopPropagation(); this.applySchedule(day, 'all'); });
-      }
-    } else {
-      // 7 Day mode
-      if(applyBtn) {
-        applyBtn.addEventListener('click', (e) => { e.stopPropagation(); this.applySchedule(day, 'single'); });
-      }
-      if(applyGroupBtn) {
-        applyGroupBtn.addEventListener('click', (e) => { e.stopPropagation(); this.applySchedule(day, 'group'); });
-      }
-      if(applyAllBtn) {
-        applyAllBtn.addEventListener('click', (e) => { e.stopPropagation(); this.applySchedule(day, 'all'); });
-      }
-    }
-    
-    // Cancel button handler
-    if(cancelBtn) {
-      cancelBtn.addEventListener('click', (e) => { e.stopPropagation(); editor.classList.remove('visible'); });
-    }
-    
-    // +/- buttons for time/temp controls: both should adjust the start time by ±30min
-    for (let i = 1; i <= 4; i++) {
-      const timeInc = this.querySelector(`#${day}-time-${i}-inc`);
-      const timeDec = this.querySelector(`#${day}-time-${i}-dec`);
-      const tempInc = this.querySelector(`#${day}-temp-${i}-inc`);
-      const tempDec = this.querySelector(`#${day}-temp-${i}-dec`);
-      
-      if (timeInc) {
-        timeInc.addEventListener('click', (ev) => {
-          ev.stopPropagation();
-          this.adjustStartTimeInput(`${day}-time-${i}`, 30);
-        });
-      }
-      if (timeDec) {
-        timeDec.addEventListener('click', (ev) => {
-          ev.stopPropagation();
-          this.adjustStartTimeInput(`${day}-time-${i}`, -30);
-        });
-      }
-      // temp +/- now change the temperature value (±1degC) instead of the start time
-      if (tempInc) {
-        tempInc.addEventListener('click', (ev) => {
-          ev.stopPropagation();
-          this.adjustTempInput(`${day}-temp-${i}`, 1);
-        });
-      }
-      if (tempDec) {
-        tempDec.addEventListener('click', (ev) => {
-          ev.stopPropagation();
-          this.adjustTempInput(`${day}-temp-${i}`, -1);
-        });
-      }
-    }
-  });
-}
-
-// Helper: adjust a time input by deltaMinutes, clamp 00:00..23:30
-adjustStartTimeInput(inputId, deltaMinutes) {
-  const input = this.querySelector(`#${inputId}`);
-  if (!input) return;
-  let val = input.value;
-  if (!val) {
-    val = '00:00';
-  }
-  // Normalize "HH:MM" (ignore possible seconds)
-  const parts = val.split(':');
-  let hh = parseInt(parts[0], 10) || 0;
-  let mm = parseInt(parts[1], 10) || 0;
-  let total = hh * 60 + mm;
-  total += deltaMinutes;
-  if (total < 0) total = 0;
-  const maxTotal = 23 * 60 + 30; // 23:30
-  if (total > maxTotal) total = maxTotal;
-  const newH = Math.floor(total / 60).toString().padStart(2, '0');
-  const newM = (total % 60).toString().padStart(2, '0');
-  const newVal = `${newH}:${newM}`;
-  input.value = newVal;
-  // If there's a corresponding time entity to update, call updateTimeValue
-  // Try to infer entity id pattern: if input id corresponds to config device mapping we use updateTimeValue
-  // For safety we do not auto-call HA services here unless time entities are mapped elsewhere.
-}
-
-// Helper: adjust a temp input by delta (step in °C), clamped to min/max attributes
-adjustTempInput(inputId, delta) {
-  const input = this.querySelector(`#${inputId}`);
-  if (!input) return;
-  const min = parseFloat(input.getAttribute('min')) || -Infinity;
-  const max = parseFloat(input.getAttribute('max')) || Infinity;
-  const step = parseFloat(input.getAttribute('step')) || 1;
-  let val = parseFloat(input.value);
-  if (Number.isNaN(val)) {
-    // if empty, initialize to min or 0
-    if (isFinite(min) && min !== -Infinity) {
-      val = min;
-    } else {
-      val = 0;
-    }
-  }
-  // apply delta and round to step precision
-  let newVal = val + delta;
-  // clamp
-  if (newVal < min) newVal = min;
-  if (newVal > max) newVal = max;
-  // round to nearest step (avoid floating point imprecision)
-  const precision = Math.round(1 / step);
-  newVal = Math.round(newVal * precision) / precision;
-  input.value = Number.isInteger(newVal) ? newVal.toString() : newVal.toFixed((step % 1) ? (step.toString().split('.')[1].length) : 0);
-  // Optionally, if you want to push changes to Home Assistant number entities, call updateNumberValue here
-  // e.g. this.updateNumberValue(numberEntityId, newVal);
-}
-
-async applySchedule(day, type = 'single') {
-  const editor = this.querySelector(`#${day}-editor`);
-  const registerValues = this.getRegisterValuesFromInputs(day);
-  
-  try {
-    switch(type) {
-      case 'single':
-      // Single day update
-      const dayIndex = this.dayOrder.indexOf(day);
-      await this.writeRegisters(this.dayRegisterStartingByte[dayIndex], registerValues);
-      break;
-      
-      case 'group':
-      // Weekday/Weekend update
-      const isWeekend = day === 'saturday' || day === 'sunday';
-      if(isWeekend) {
-        // Write to Saturday and Sunday separately
-        await this.writeRegisters(this.dayRegisterStartingByte[5], registerValues, false); // Saturday
-        await this.writeRegisters(this.dayRegisterStartingByte[6], registerValues); // Sunday
+  // Helper: adjust a temp input by delta (step in °C), clamped to min/max attributes
+  adjustTempInput(inputId, delta) {
+    const input = this.querySelector(`#${inputId}`);
+    if (!input) return;
+    const min = parseFloat(input.getAttribute('min')) || -Infinity;
+    const max = parseFloat(input.getAttribute('max')) || Infinity;
+    const step = parseFloat(input.getAttribute('step')) || 1;
+    let val = parseFloat(input.value);
+    if (Number.isNaN(val)) {
+      // if empty, initialize to min or 0
+      if (isFinite(min) && min !== -Infinity) {
+        val = min;
       } else {
-        // Write to Monday-Friday in one call
-        const weekdayValues = Array(5).fill(registerValues).flat();
-        await this.writeRegisters(this.dayRegisterStartingByte[0], weekdayValues);
+        val = 0;
       }
-      break;
+    }
+    // apply delta and round to step precision
+    let newVal = val + delta;
+    // clamp
+    if (newVal < min) newVal = min;
+    if (newVal > max) newVal = max;
+    // round to nearest step (avoid floating point imprecision)
+    const precision = Math.round(1 / step);
+    newVal = Math.round(newVal * precision) / precision;
+    input.value = Number.isInteger(newVal) ? newVal.toString() : newVal.toFixed((step % 1) ? (step.toString().split('.')[1].length) : 0);
+    // Optionally, if you want to push changes to Home Assistant number entities, call updateNumberValue here
+    // e.g. this.updateNumberValue(numberEntityId, newVal);
+  }
+  
+  async applySchedule(day, type = 'single') {
+    const editor = this.querySelector(`#${day}-editor`);
+    const registerValues = this.getRegisterValuesFromInputs(day);
+    
+    try {
+      switch(type) {
+        case 'single':
+        // Single day update
+        const dayIndex = this.dayOrder.indexOf(day);
+        await this.writeRegisters(this.dayRegisterStartingByte[dayIndex], registerValues);
+        break;
+        
+        case 'group':
+        // Weekday/Weekend update
+        const isWeekend = day === 'saturday' || day === 'sunday';
+        if(isWeekend) {
+          // Write to Saturday and Sunday separately
+          await this.writeRegisters(this.dayRegisterStartingByte[5], registerValues, false); // Saturday
+          await this.writeRegisters(this.dayRegisterStartingByte[6], registerValues); // Sunday
+        } else {
+          // Write to Monday-Friday in one call
+          const weekdayValues = Array(5).fill(registerValues).flat();
+          await this.writeRegisters(this.dayRegisterStartingByte[0], weekdayValues);
+        }
+        break;
+        
+        case 'all':
+        // All days update
+        const allDaysValues = [];
+        // Start with Sunday (register 50)
+        allDaysValues.push(...registerValues);
+        // Then Monday through Saturday (registers 74-217)
+        const remainingDaysValues = Array(6).fill(registerValues).flat();
+        allDaysValues.push(...remainingDaysValues);
+        await this.writeRegisters(50, allDaysValues);
+        break;
+      }
       
-      case 'all':
-      // All days update
-      const allDaysValues = [];
-      // Start with Sunday (register 50)
-      allDaysValues.push(...registerValues);
-      // Then Monday through Saturday (registers 74-217)
-      const remainingDaysValues = Array(6).fill(registerValues).flat();
-      allDaysValues.push(...remainingDaysValues);
-      await this.writeRegisters(50, allDaysValues);
-      break;
+      editor.classList.remove('visible');
+      
+      // Wait for writes to complete before refreshing
+      setTimeout(() => {
+        this.readScheduleFromDevice();
+        this.updateScheduleDisplay();
+      }, 2000);
+    } catch (error) {
+      console.error('Error applying schedule:', error);
     }
-    
-    editor.classList.remove('visible');
-    
-    // Wait for writes to complete before refreshing
-    setTimeout(() => {
-      this.readScheduleFromDevice();
-      this.updateScheduleDisplay();
-    }, 2000);
-  } catch (error) {
-    console.error('Error applying schedule:', error);
-  }
-}
-
-renderAll() {
-  console.log("Rendering all days at time "+new Date().toLocaleTimeString());
-  this.dayOrder.forEach(day => this.renderDay(day));
-}
-
-renderDay(day) {
-  const container = this.querySelector(`#${day}`);
-  const ticker = this.querySelector(`#${day}-ticker`);
-  const labels = this.querySelector(`#${day}-ticker-labels`);
-  const slots = this.thermostatSchedule[day];
-  if(!container || !ticker || !labels) return;
-  
-  container.innerHTML = '';
-  if(slots.length===0) return;
-  
-  // Get previous day's last temperature
-  const dayIndex = this.dayOrder.indexOf(day);
-  const previousDay = this.dayOrder[(dayIndex - 1 + 7) % 7];
-  const previousDaySlots = this.thermostatSchedule[previousDay];
-  const previousDayLastTemp = previousDaySlots[previousDaySlots.length - 1].temp;
-  
-  // Build segments
-  const firstSlotTime = this.parseTimeToMinutes(slots[0].time);
-  
-  // Add initial segment if first slot doesn't start at midnight
-  if (firstSlotTime > 0) {
-    const initialDiv = document.createElement('div');
-    initialDiv.className = 'segment';
-    initialDiv.style.width = (firstSlotTime / 1440 * 100) + '%';
-    initialDiv.style.background = this.getColorForTemperature(previousDayLastTemp);
-    initialDiv.textContent = previousDayLastTemp + '°';
-    container.appendChild(initialDiv);
   }
   
-  // Build remaining segments
-  for(let i = 0; i < slots.length; i++) {
-    const current = slots[i];
-    const next = slots[i+1] || {time:'24:00'};
-    const startMins = this.parseTimeToMinutes(current.time);
-    const endMins = this.parseTimeToMinutes(next.time);
-    const widthPercent = ((endMins-startMins)/1440)*100;
-    const div = document.createElement('div');
-    div.className = 'segment';
-    div.style.width = widthPercent + '%';
-    div.style.background = this.getColorForTemperature(current.temp);
-    div.textContent = current.temp + '°';
-    container.appendChild(div);
+  renderAll() {
+    console.log("Rendering all days at time "+new Date().toLocaleTimeString());
+    this.dayOrder.forEach(day => this.renderDay(day));
   }
   
-  // Build tickers
-  ticker.innerHTML='';
-  labels.innerHTML='';
-  for(let i=0;i<96;i++){
-    const tick = document.createElement('div');
-    tick.className='tick';
-    if(i%4===0) tick.classList.add('hour');
-    if(i%12===0) tick.classList.add('major');
-    ticker.appendChild(tick);
-  }
-  for(let h=0;h<=24;h+=3){
-    const lbl = document.createElement('div');
-    lbl.className='tick-number';
-    lbl.style.left=(h/24*100)+'%';
-    lbl.textContent=h;
-    labels.appendChild(lbl);
-  }
-}
-
-updateScheduleDisplay() {
-  console.log("Updating schedule display at " + new Date().toLocaleTimeString());
-  
-  const scheduleMode = this.getScheduleMode();
-  let visibleDays;
-  if (scheduleMode === 'Weekday/Weekend') {
-    visibleDays = ['monday', 'saturday'];
-  } else {
-    visibleDays = this.dayOrder;
-  }
-  
-  visibleDays.forEach(day => {
-    const slots = this.thermostatSchedule[day];
-    const currentSerialized = JSON.stringify(slots || []);
-    // Skip updating this day if nothing changed since last render
-    if (this._lastRenderedSchedule[day] === currentSerialized) {
-      console.log(`No changes for ${day}, skipping update.`);
-      return;
-    }
-    
+  renderDay(day) {
     const container = this.querySelector(`#${day}`);
-    if (!container) {
-      // still update the cache so that future checks are correct
-      this._lastRenderedSchedule[day] = currentSerialized;
-      return;
-    }
+    const ticker = this.querySelector(`#${day}-ticker`);
+    const labels = this.querySelector(`#${day}-ticker-labels`);
+    const slots = this.thermostatSchedule[day];
+    if(!container || !ticker || !labels) return;
     
-    // Proceed to update DOM for this day (existing update logic)
-    // Get all existing segments
-    const segments = container.querySelectorAll('.segment');
+    container.innerHTML = '';
+    if(slots.length===0) return;
     
-    // Get previous day's last temperature for the first segment
+    // Get previous day's last temperature
     const dayIndex = this.dayOrder.indexOf(day);
     const previousDay = this.dayOrder[(dayIndex - 1 + 7) % 7];
     const previousDaySlots = this.thermostatSchedule[previousDay];
     const previousDayLastTemp = previousDaySlots[previousDaySlots.length - 1].temp;
     
-    // Calculate first slot time
-    const firstSlotTime = slots.length > 0 ? this.parseTimeToMinutes(slots[0].time) : 0;
+    // Build segments
+    const firstSlotTime = this.parseTimeToMinutes(slots[0].time);
     
-    // Update or create segments
-    let currentSegments = Array.from(segments);
-    
-    // Update/create initial segment if needed
+    // Add initial segment if first slot doesn't start at midnight
     if (firstSlotTime > 0) {
-      if (currentSegments[0]) {
-        // Update existing initial segment
-        currentSegments[0].style.width = (firstSlotTime / 1440 * 100) + '%';
-        currentSegments[0].style.background = this.getColorForTemperature(previousDayLastTemp);
-        currentSegments[0].textContent = previousDayLastTemp + '°';
-      } else {
-        // Create new initial segment
-        const initialDiv = document.createElement('div');
-        initialDiv.className = 'segment';
-        initialDiv.style.width = (firstSlotTime / 1440 * 100) + '%';
-        initialDiv.style.background = this.getColorForTemperature(previousDayLastTemp);
-        initialDiv.textContent = previousDayLastTemp + '°';
-        container.appendChild(initialDiv);
-      }
-      currentSegments = currentSegments.slice(1);
-    } else {
-      // If there's no initial segment but one exists in DOM, ensure we treat segments correctly
-      // leave currentSegments as-is (no slice)
+      const initialDiv = document.createElement('div');
+      initialDiv.className = 'segment';
+      initialDiv.style.width = (firstSlotTime / 1440 * 100) + '%';
+      initialDiv.style.background = this.getColorForTemperature(previousDayLastTemp);
+      initialDiv.textContent = previousDayLastTemp + '°';
+      container.appendChild(initialDiv);
     }
     
-    // Update remaining segments
-    slots.forEach((slot, i) => {
-      const next = slots[i + 1] || { time: '24:00' };
-      const startMins = this.parseTimeToMinutes(slot.time);
+    // Build remaining segments
+    for(let i = 0; i < slots.length; i++) {
+      const current = slots[i];
+      const next = slots[i+1] || {time:'24:00'};
+      const startMins = this.parseTimeToMinutes(current.time);
       const endMins = this.parseTimeToMinutes(next.time);
-      const widthPercent = ((endMins - startMins) / 1440) * 100;
-      
-      if (currentSegments[i]) {
-        // Update existing segment
-        currentSegments[i].style.width = widthPercent + '%';
-        currentSegments[i].style.background = this.getColorForTemperature(slot.temp);
-        currentSegments[i].textContent = slot.temp + '°';
-      } else {
-        // Create new segment if needed
-        const div = document.createElement('div');
-        div.className = 'segment';
-        div.style.width = widthPercent + '%';
-        div.style.background = this.getColorForTemperature(slot.temp);
-        div.textContent = slot.temp + '°';
-        container.appendChild(div);
-      }
-    });
-    
-    // Remove any excess segments
-    const totalSegmentsNeeded = slots.length + (firstSlotTime > 0 ? 1 : 0);
-    while (container.children.length > totalSegmentsNeeded) {
-      container.removeChild(container.lastChild);
+      const widthPercent = ((endMins-startMins)/1440)*100;
+      const div = document.createElement('div');
+      div.className = 'segment';
+      div.style.width = widthPercent + '%';
+      div.style.background = this.getColorForTemperature(current.temp);
+      div.textContent = current.temp + '°';
+      container.appendChild(div);
     }
     
-    // Update editor fields if visible
-    const editor = this.querySelector(`#${day}-editor`);
-    if (editor && editor.classList.contains('visible')) {
-      slots.forEach((slot, i) => {
-        const timeInput = this.querySelector(`#${day}-time-${i + 1}`);
-        const tempInput = this.querySelector(`#${day}-temp-${i + 1}`);
-        if (timeInput) timeInput.value = slot.time;
-        if (tempInput) tempInput.value = slot.temp;
-      });
+    // Build tickers
+    ticker.innerHTML='';
+    labels.innerHTML='';
+    for(let i=0;i<96;i++){
+      const tick = document.createElement('div');
+      tick.className='tick';
+      if(i%4===0) tick.classList.add('hour');
+      if(i%12===0) tick.classList.add('major');
+      ticker.appendChild(tick);
     }
+    for(let h=0;h<=24;h+=3){
+      const lbl = document.createElement('div');
+      lbl.className='tick-number';
+      lbl.style.left=(h/24*100)+'%';
+      lbl.textContent=h;
+      labels.appendChild(lbl);
+    }
+  }
+  
+  updateScheduleDisplay() {
+    console.log("Updating schedule display at " + new Date().toLocaleTimeString());
     
-    // Mark this day's schedule as rendered
-    this._lastRenderedSchedule[day] = currentSerialized;
-    console.log(`Updated display for ${day}`)
-  });
-}
-
-// Add this helper function after the constructor
-async writeRegisters(registerStart, values, isLastWrite = true) {
-  await this._hass.callService('heatmiser_edge', 'write_register_range', {
-    device_id: ['4e03fdc94f493c4af45a120ad23013e5'],
-    register: registerStart,
-    values: values.join(','),
-    refresh_values_after_writing: isLastWrite
-  });
-}
-
-// Add this new method to find the climate entity
-findClimateEntityFromDevice(deviceId) {
-  if (!this._hass || !deviceId) {
-    return null;
-  }
-  
-  const entities = this._hass.entities || {};
-  
-  for (const [entityId, entity] of Object.entries(entities)) {
-    if (entity.device_id === deviceId && 
-      entityId.startsWith('climate.') && 
-      entityId.includes('thermostat')) {
-        return entityId;
-      }
-    }
-    
-    return null;
-  }
-
-  // Add this new method to find the schedule mode entity
-findScheduleModeEntityFromDevice(deviceId) {
-  if (!this._hass || !deviceId) {
-    return null;
-  }
-  
-  const entities = this._hass.entities || {};
-  
-  for (const [entityId, entity] of Object.entries(entities)) {
-    if (entity.device_id === deviceId && 
-      entityId.startsWith('select.') && 
-      entityId.includes('schedule_mode')) {
-        return entityId;
-      }
-    }
-    
-    return null;
-  }
-  
-  setConfig(config) {
-    console.log("Setting config");
-    if (!config.device) {
-      throw new Error("You need to define a device");
-    }
-    this.config = config;
-  }
-  
-  getColorForTemperature(temp) {
-    if (temp < 15) {
-      return '#185fb6';
-    }
-    if (temp < 19) {
-      return '#00bcd4';
-    }
-    if (temp < 23) {
-      return '#ffc107';
-    }
-    if (temp >= 23) {
-      return '#e53935';
-    }
-    return '#fdd835';
-  }
-  
-  prefillEditor(day){
-    for(let i=1;i<=4;i++){
-      const entry = this.thermostatSchedule[day][i-1];
-      if(entry){
-        this.querySelector(`#${day}-time-${i}`).value = entry.time;
-        this.querySelector(`#${day}-temp-${i}`).value = entry.temp;
-      }
-    }
-  }
-  
-  parseTimeToMinutes(time) {
-    const [hh, mm] = time.split(':').map(Number);
-    return hh * 60 + mm;
-  }
-  
-  getRegisterValuesFromInputs(day) {
-    const registerValues = [];
-    
-    // Get all periods (up to 6)
-    for(let i=1; i<=6; i++) {
-      if(i <= 4) {
-        const timeInput = this.querySelector(`#${day}-time-${i}`);
-        const tempInput = this.querySelector(`#${day}-temp-${i}`);
-        
-        if(timeInput?.value && tempInput?.value) {
-          const [hours, minutes] = timeInput.value.split(':').map(Number);
-          const temp = Math.round(parseFloat(tempInput.value) * 10);
-          registerValues.push(hours, minutes, temp, 0);
-        }
-      } else {
-        // Add default values for periods 5-6
-        registerValues.push(24, 0, 160, 0);
-      }
-    }
-    
-    return registerValues;
-  }
-  
-  getScheduleMode() {
-    const modeState = this._hass.states[this.scheduleMode];
-    console.log(`Schedule mode entity: ${this.scheduleMode}, state: ${modeState?.state}`);
-    
-    if (modeState && modeState.state) {
-      return modeState.state;
+    const scheduleMode = this.getScheduleMode();
+    let visibleDays;
+    if (scheduleMode === 'Weekday/Weekend') {
+      visibleDays = ['monday', 'saturday'];
     } else {
-      return 'Full Week';
+      visibleDays = this.dayOrder;
     }
+    
+    visibleDays.forEach(day => {
+      const slots = this.thermostatSchedule[day];
+      const currentSerialized = JSON.stringify(slots || []);
+      // Skip updating this day if nothing changed since last render
+      if (this._lastRenderedSchedule[day] === currentSerialized) {
+        console.log(`No changes for ${day}, skipping update.`);
+        return;
+      }
+      
+      const container = this.querySelector(`#${day}`);
+      if (!container) {
+        // still update the cache so that future checks are correct
+        this._lastRenderedSchedule[day] = currentSerialized;
+        return;
+      }
+      
+      // Proceed to update DOM for this day (existing update logic)
+      // Get all existing segments
+      const segments = container.querySelectorAll('.segment');
+      
+      // Get previous day's last temperature for the first segment
+      const dayIndex = this.dayOrder.indexOf(day);
+      const previousDay = this.dayOrder[(dayIndex - 1 + 7) % 7];
+      const previousDaySlots = this.thermostatSchedule[previousDay];
+      const previousDayLastTemp = previousDaySlots[previousDaySlots.length - 1].temp;
+      
+      // Calculate first slot time
+      const firstSlotTime = slots.length > 0 ? this.parseTimeToMinutes(slots[0].time) : 0;
+      
+      // Update or create segments
+      let currentSegments = Array.from(segments);
+      
+      // Update/create initial segment if needed
+      if (firstSlotTime > 0) {
+        if (currentSegments[0]) {
+          // Update existing initial segment
+          currentSegments[0].style.width = (firstSlotTime / 1440 * 100) + '%';
+          currentSegments[0].style.background = this.getColorForTemperature(previousDayLastTemp);
+          currentSegments[0].textContent = previousDayLastTemp + '°';
+        } else {
+          // Create new initial segment
+          const initialDiv = document.createElement('div');
+          initialDiv.className = 'segment';
+          initialDiv.style.width = (firstSlotTime / 1440 * 100) + '%';
+          initialDiv.style.background = this.getColorForTemperature(previousDayLastTemp);
+          initialDiv.textContent = previousDayLastTemp + '°';
+          container.appendChild(initialDiv);
+        }
+        currentSegments = currentSegments.slice(1);
+      } else {
+        // If there's no initial segment but one exists in DOM, ensure we treat segments correctly
+        // leave currentSegments as-is (no slice)
+      }
+      
+      // Update remaining segments
+      slots.forEach((slot, i) => {
+        const next = slots[i + 1] || { time: '24:00' };
+        const startMins = this.parseTimeToMinutes(slot.time);
+        const endMins = this.parseTimeToMinutes(next.time);
+        const widthPercent = ((endMins - startMins) / 1440) * 100;
+        
+        if (currentSegments[i]) {
+          // Update existing segment
+          currentSegments[i].style.width = widthPercent + '%';
+          currentSegments[i].style.background = this.getColorForTemperature(slot.temp);
+          currentSegments[i].textContent = slot.temp + '°';
+        } else {
+          // Create new segment if needed
+          const div = document.createElement('div');
+          div.className = 'segment';
+          div.style.width = widthPercent + '%';
+          div.style.background = this.getColorForTemperature(slot.temp);
+          div.textContent = slot.temp + '°';
+          container.appendChild(div);
+        }
+      });
+      
+      // Remove any excess segments
+      const totalSegmentsNeeded = slots.length + (firstSlotTime > 0 ? 1 : 0);
+      while (container.children.length > totalSegmentsNeeded) {
+        container.removeChild(container.lastChild);
+      }
+      
+      // Update editor fields if visible
+      const editor = this.querySelector(`#${day}-editor`);
+      if (editor && editor.classList.contains('visible')) {
+        slots.forEach((slot, i) => {
+          const timeInput = this.querySelector(`#${day}-time-${i + 1}`);
+          const tempInput = this.querySelector(`#${day}-temp-${i + 1}`);
+          if (timeInput) timeInput.value = slot.time;
+          if (tempInput) tempInput.value = slot.temp;
+        });
+      }
+      
+      // Mark this day's schedule as rendered
+      this._lastRenderedSchedule[day] = currentSerialized;
+      console.log(`Updated display for ${day}`)
+    });
   }
-
-  getEntityState(entityId,defaultValue=null) {
-    const entity = this._hass.states[entityId];
-    if (entity) {
-      return entity.state;
-    }
-    return defaultValue;
+  
+  // Add this helper function after the constructor
+  async writeRegisters(registerStart, values, isLastWrite = true) {
+    await this._hass.callService('heatmiser_edge', 'write_register_range', {
+      device_id: ['4e03fdc94f493c4af45a120ad23013e5'],
+      register: registerStart,
+      values: values.join(','),
+      refresh_values_after_writing: isLastWrite
+    });
   }
-}
-
-customElements.define('heatmiseredge-schedule-card', HeatmiserEdgeScheduleCard);
-window.customCards = window.customCards || [];
-window.customCards.push({
-  type: "heatmiseredge-schedule-card",
-  name: "Heatmiser Edge schedule card",
-  preview: false, // Optional - defaults to false
-  description: "Allows you to easily modify the schedules on your Heatmiser edge thermostats", // Optional
-  documentationURL:
-    "https://github.com/sftgunner/heatmiseredge-schedule-card", // Adds a help link in the frontend card editor
-});
+    
+    findEntityFromDevice(deviceId, startsWith="climate.", includes="thermostat") {
+      if (!this._hass || !deviceId) {
+        return null;
+      }
+      
+      const entities = this._hass.entities || {};
+      
+      for (const [entityId, entity] of Object.entries(entities)) {
+        if (entity.device_id === deviceId && 
+          entityId.startsWith(startsWith) && 
+          entityId.includes(includes)) {
+            return entityId;
+          }
+        }
+      }
+        
+        setConfig(config) {
+          console.log("Setting config");
+          if (!config.device) {
+            throw new Error("You need to define a device");
+          }
+          this.config = config;
+        }
+        
+        getColorForTemperature(temp) {
+          if (temp < 15) {
+            return '#185fb6';
+          }
+          if (temp < 19) {
+            return '#00bcd4';
+          }
+          if (temp < 23) {
+            return '#ffc107';
+          }
+          if (temp >= 23) {
+            return '#e53935';
+          }
+          return '#fdd835';
+        }
+        
+        prefillEditor(day){
+          for(let i=1;i<=4;i++){
+            const entry = this.thermostatSchedule[day][i-1];
+            if(entry){
+              this.querySelector(`#${day}-time-${i}`).value = entry.time;
+              this.querySelector(`#${day}-temp-${i}`).value = entry.temp;
+            }
+          }
+        }
+        
+        parseTimeToMinutes(time) {
+          const [hh, mm] = time.split(':').map(Number);
+          return hh * 60 + mm;
+        }
+        
+        getRegisterValuesFromInputs(day) {
+          const registerValues = [];
+          
+          // Get all periods (up to 6)
+          for(let i=1; i<=6; i++) {
+            if(i <= 4) {
+              const timeInput = this.querySelector(`#${day}-time-${i}`);
+              const tempInput = this.querySelector(`#${day}-temp-${i}`);
+              
+              if(timeInput?.value && tempInput?.value) {
+                const [hours, minutes] = timeInput.value.split(':').map(Number);
+                const temp = Math.round(parseFloat(tempInput.value) * 10);
+                registerValues.push(hours, minutes, temp, 0);
+              }
+            } else {
+              // Add default values for periods 5-6
+              registerValues.push(24, 0, 160, 0);
+            }
+          }
+          
+          return registerValues;
+        }
+        
+        getScheduleMode() {
+          const modeState = this._hass.states[this.scheduleMode];
+          console.log(`Schedule mode entity: ${this.scheduleMode}, state: ${modeState?.state}`);
+          
+          if (modeState && modeState.state) {
+            return modeState.state;
+          } else {
+            return 'Full Week';
+          }
+        }
+        
+        getEntityState(entityId,defaultValue=null) {
+          const entity = this._hass.states[entityId];
+          if (entity) {
+            return entity.state;
+          }
+          return defaultValue;
+        }
+      }
+      
+      customElements.define('heatmiseredge-schedule-card', HeatmiserEdgeScheduleCard);
+      window.customCards = window.customCards || [];
+      window.customCards.push({
+        type: "heatmiseredge-schedule-card",
+        name: "Heatmiser Edge schedule card",
+        preview: false, // Optional - defaults to false
+        description: "Allows you to easily modify the schedules on your Heatmiser edge thermostats", // Optional
+        documentationURL:
+        "https://github.com/sftgunner/heatmiseredge-schedule-card", // Adds a help link in the frontend card editor
+      });
