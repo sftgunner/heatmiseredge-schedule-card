@@ -357,8 +357,10 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         .day-row { margin: 16px 0; }
         .day-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
         .day-label { font-size:18px; font-weight:bold; }
-        .progress-container { position:relative; display:flex; height:40px; background:#f0f0f0; border-radius:4px; overflow:hidden; }
-        .current-time-indicator { position: absolute; top: 0; bottom: 0; width: 4px; background-color: #ff0000; z-index: 1; pointer-events: none; }
+        /* wrapper contains progress + ticker so indicator can span both */
+        .progress-wrapper { position: relative; }
+        .progress-container { display:flex; height:40px; background:#f0f0f0; border-radius:4px; overflow:hidden; }
+        .current-time-indicator { position: absolute; top: 0; bottom: 0; width: 4px; background-color: #ff0000; z-index: 2; pointer-events: none; }
         .segment { display:flex; align-items:center; justify-content:center; font-weight:bold; color:white; transition: background-color 0.3s; }
         .segment:not(:first-child) {
         border-left: 2px solid #ffffff;}
@@ -458,8 +460,10 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
             <div class="day-label">${displayName}</div>
             <ha-button class="edit-btn" data-edit="${day}" size="small">Edit</ha-button>
           </div>
-          <div class="progress-container" id="${day}"></div>
-          <div class="ticker" id="${day}-ticker"></div>
+          <div class="progress-wrapper" id="${day}-wrapper">
+            <div class="progress-container" id="${day}"></div>
+            <div class="ticker" id="${day}-ticker"></div>
+          </div>
           <div class="ticker-labels" id="${day}-ticker-labels"></div>
           <div class="day-editor" id="${day}-editor">
             <div class="fields">
@@ -615,6 +619,12 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
 
       targetDeviceHaSelector.addEventListener('value-changed', (ev) => {
         const val = ev?.detail?.value;
+        if (val == "") {
+          this.setAlert("Schedule will not be applied to any devices. Please select at least one target device.","error");
+        }
+        else{
+          this.setAlert("","none"); // Clear any existing alerts
+        }
         if (val) {
           console.log(`Target device(s) for schedule application changed to ${val}`);
         }
@@ -961,22 +971,22 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     // Get current day name in lowercase
     const currentDay = now.toLocaleString('en-gb', {  weekday: 'long' }).toLocaleLowerCase();
     
-    // Handle different schedule modes
+    // Handle different schedule modes - target the wrapper so the indicator spans both progress + ticker
     let containersToUpdate = [];
     if (this.scheduleMode === '24 hour') {
-      // In 24 hour mode, update all visible containers
-      containersToUpdate = this.dayOrder.map(day => this.querySelector(`#${day}`));
+      // In 24 hour mode, update all visible wrappers
+      containersToUpdate = this.dayOrder.map(day => this.querySelector(`#${day}-wrapper`));
     } else if (this.scheduleMode === 'Weekday/Weekend') {
       if (['saturday', 'sunday'].includes(currentDay)) {
         // Weekend - show on saturday container
-        containersToUpdate = [this.querySelector('#saturday')];
+        containersToUpdate = [this.querySelector('#saturday-wrapper')];
       } else {
         // Weekday - show on monday container
-        containersToUpdate = [this.querySelector('#monday')];
+        containersToUpdate = [this.querySelector('#monday-wrapper')];
       }
     } else {
       // 7 day mode - only show on current day
-      containersToUpdate = [this.querySelector(`#${currentDay}`)];
+      containersToUpdate = [this.querySelector(`#${currentDay}-wrapper`)];
     }
     
     // Remove existing indicators
