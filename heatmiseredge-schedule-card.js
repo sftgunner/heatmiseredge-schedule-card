@@ -396,19 +396,16 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         <!-- Alert placeholder: controlled via setAlert(text,severity) -->
         <ha-alert id="card-alert" alert-type="info" style="display:none;"></ha-alert>
 
-        <!-- Device selector and checkboxes -->
-        <div class="device-controls">
-          <div class="device-selector-row">
-            <label for="device-selector">Device:</label>
-            <select id="device-selector">
-              ${this.deviceIds.map(id => `<option value="${id}" ${id === this.activeDeviceId ? 'selected' : ''}>${id}</option>`).join('')}
-            </select>
-          </div>
-          <div id="device-checkboxes" class="device-checkboxes">
-            ${this.deviceIds.map(id => `<label><input type="checkbox" data-device="${id}" ${id === this.activeDeviceId ? 'checked' : ''}> ${id}</label>`).join('')}
-          </div>
+        <!-- Active device selector (ha-selector) -->
+        <div style="margin:8px 0;">
+          <label for="active-device-ha-selector" style="display:block; margin-bottom:4px;">Load schedule from:</label>
+          <ha-selector id="active-device-ha-selector"></ha-selector>
         </div>
-
+        <!-- Target device selector (ha-selector) -->
+        <div style="margin:8px 0;">
+          <label for="target-device-ha-selector" style="display:block; margin-bottom:4px;">Apply schedule to:</label>
+          <ha-selector id="target-device-ha-selector"></ha-selector>
+        </div>
         <div class="thermostat-header">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <div class="entity-info">
@@ -549,43 +546,67 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
       });
     }
 
-    // Device selector change handler
-    const deviceSelector = this.querySelector('#device-selector');
-    if (deviceSelector) {
-      deviceSelector.addEventListener('change', (e) => {
-        const newId = e.target.value;
-        if (newId && newId !== this.activeDeviceId) {
-          this.activeDeviceId = newId;
+
+    // Initialize ha-selector for active device selector
+    const activeDeviceHaSelector = this.querySelector('#active-device-ha-selector');
+    if (activeDeviceHaSelector) {
+      try {
+        activeDeviceHaSelector.selector = {
+          select: {
+            placeholder: 'Select a device',
+            mode: 'dropdown',
+            options: (this.deviceIds || []).map(id => ({ value: id, label: this.findDeviceNameFromId(id) }))
+          }
+        };
+      } catch (err) {
+        console.warn('Unable to set selector property on ha-selector', err);
+      }
+
+      if (this.activeDeviceId) {
+        try { activeDeviceHaSelector.value = this.activeDeviceId; } catch (_) {}
+      }
+
+      activeDeviceHaSelector.addEventListener('value-changed', (ev) => {
+        const val = ev?.detail?.value;
+        console.warn(val);
+        if (val && val !== this.activeDeviceId) {
+          console.warn(`Active device for schedule viewing changed to ${val}`);
+          this.activeDeviceId = val;
+          // sync native select and checkboxes
+          const sel = this.querySelector('#active-device-selector');
+          if (sel) sel.value = val;
+          const checkbox = this.querySelector(`#active-device-checkboxes input[data-device="${val}"]`);
+          if (checkbox) checkbox.checked = true;
           // reload schedule for new active device
-          this.readScheduleFromDevice(this.activeDeviceId);
-          this.updateScheduleDisplay();
-          // update header/summary immediately
           this.updateContent(this.content, false);
         }
       });
     }
 
-    // Device checkboxes handler - updates this.deviceIds to currently checked items
-    const checkboxContainer = this.querySelector('#device-checkboxes');
-    if (checkboxContainer) {
-      checkboxContainer.querySelectorAll('input[type="checkbox"][data-device]').forEach(cb => {
-        cb.addEventListener('change', (e) => {
-          const checked = Array.from(checkboxContainer.querySelectorAll('input[type="checkbox"][data-device]:checked')).map(c => c.getAttribute('data-device'));
-          this.deviceIds = checked;
-          // ensure activeDeviceId remains selected (if it was unchecked, pick first checked)
-          if (!this.deviceIds.includes(this.activeDeviceId)) {
-            this.activeDeviceId = this.deviceIds[0] || null;
-            // update selector UI to reflect change
-            const sel = this.querySelector('#device-selector');
-            if (sel) sel.value = this.activeDeviceId || '';
-            // reload schedule for new active device
-            if (this.activeDeviceId) {
-              this.readScheduleFromDevice(this.activeDeviceId);
-              this.updateScheduleDisplay();
-              this.updateContent(this.content, false);
-            }
+        // Initialize ha-selector for active device selector
+    const targetDeviceHaSelector = this.querySelector('#target-device-ha-selector');
+    if (targetDeviceHaSelector) {
+      try {
+        targetDeviceHaSelector.selector = {
+          select: {
+            placeholder: 'Select a device',
+            multiple: 'true',
+            options: (this.deviceIds || []).map(id => ({ value: id, label: this.findDeviceNameFromId(id) }))
           }
-        });
+        };
+      } catch (err) {
+        console.warn('Unable to set selector property on ha-selector', err);
+      }
+
+      if (this.activeDeviceId) {
+        try { targetDeviceHaSelector.value = this.activeDeviceId; } catch (_) {}
+      }
+
+      targetDeviceHaSelector.addEventListener('value-changed', (ev) => {
+        const val = ev?.detail?.value;
+        if (val) {
+          console.log(`Target device(s) for schedule application changed to ${val}`);
+        }
       });
     }
     
@@ -972,6 +993,22 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         }
       }
     }
+
+  // Returns a human friendly name for the device or original id if not found.
+  findDeviceNameFromId(deviceId) {
+    if (!this._hass || !deviceId) {
+      return null;
+    }
+
+    // Check to see if deviceId in _hass devices
+    if (this._hass.devices && this._hass.devices[deviceId]){
+      return this._hass.devices[deviceId]?.name
+    }
+
+    // If no matching device found, return deviceId
+    // console.log(`No device name found for device_id: ${deviceId}`);
+    return deviceId;
+  }
     
     setConfig(config) {
       console.log("Setting config");
