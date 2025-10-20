@@ -243,6 +243,8 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     const scheduleModeChanged = previousScheduleModeState !== this.scheduleMode;
     
     if (firstRender || scheduleModeChanged){
+      // Force re-rendering of all days if schedule mode has changed
+      this._lastRenderedSchedule = {};
       this.render();
       this.attachEventHandlers();
     }
