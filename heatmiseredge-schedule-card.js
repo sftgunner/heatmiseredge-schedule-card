@@ -207,13 +207,15 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
   }
   
   updateContent(content, firstRender) {
-    if (this.config.device instanceof Array) {
-      this.activeDeviceId = this.config.device[0]; // On initial load, select the first named device as the active device
-      this.allDeviceIds = this.config.device;
-    }
-    else {
-      this.activeDeviceId = this.config.device;
-      this.allDeviceIds = [this.config.device];
+    if (!this.activeDeviceId) {     // If activeDeviceId is not set, set it from config
+      if (this.config.device instanceof Array) {
+        this.activeDeviceId = this.config.device[0]; // On initial load, select the first named device as the active device
+        this.allDeviceIds = this.config.device;
+      }
+      else {
+        this.activeDeviceId = this.config.device;
+        this.allDeviceIds = [this.config.device];
+      }
     }
 
     // keep deviceIds in sync for the UI elements (checkbox list and selector)
@@ -423,16 +425,23 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         </div>
     `;
     let visibleDays;
-    if (this.scheduleMode === 'Weekday/Weekend') {
-      visibleDays = ['friday', 'saturday']; // Default is using friday for weekdays, and saturday for weekends
-    } else {
+    if (this.scheduleMode === '24 hour') {
+      visibleDays = ['monday']; // Default is using friday for weekdays, and saturday for weekends
+    }
+    else if (this.scheduleMode === 'Weekday/Weekend') {
+      visibleDays = ['monday', 'saturday']; // Default is using monday for weekdays, and saturday for weekends
+    } 
+    else {
       visibleDays = this.dayOrder;
     }
     
     visibleDays.forEach(day => {
       let displayName;
-      if (this.scheduleMode === 'Weekday/Weekend') {
-        if (day === 'friday') {
+      if (this.scheduleMode === '24 hour') {
+        displayName = 'Daily';
+      }
+      else if (this.scheduleMode === 'Weekday/Weekend') {
+        if (day === 'monday') {
           displayName = 'Weekdays';
         } else {
           displayName = 'Weekends';
@@ -470,7 +479,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
               </div>`).join('')}
             </div>
             <div class="actions">
-              ${this.scheduleMode === '24 Hour' ? `
+              ${this.scheduleMode === '24 hour' ? `
                 <ha-button class="apply" id="${day}-apply-all" size="small" appearance="filled">Apply all</ha-button>
                 <ha-button class="cancel" id="${day}-cancel" size="small">Cancel</ha-button>
               ` : this.scheduleMode === 'Weekday/Weekend' ? `
@@ -653,7 +662,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
       }
       
       // Apply button handlers based on schedule mode
-      if (this.scheduleMode === '24 Hour') {
+      if (this.scheduleMode === '24 hour') {
         if(applyAllBtn) {
           applyAllBtn.addEventListener('click', (e) => { e.stopPropagation(); this.applySchedule(day, 'all'); });
         }
@@ -829,7 +838,10 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     console.log("Updating schedule display at " + new Date().toLocaleTimeString());
     
     let visibleDays;
-    if (this.scheduleMode === 'Weekday/Weekend') {
+    if (this.scheduleMode === '24 hour') {
+      visibleDays = ['monday'];
+    } 
+    else if (this.scheduleMode === 'Weekday/Weekend') {
       visibleDays = ['monday', 'saturday'];
     } else {
       visibleDays = this.dayOrder;
@@ -857,7 +869,18 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
       
       // Get previous day's last temperature for the first segment
       const dayIndex = this.dayOrder.indexOf(day);
-      const previousDay = this.dayOrder[(dayIndex - 1 + 7) % 7];
+      let previousDayIndex = 0;
+      if (this.scheduleMode === '24 hour') {
+        previousDayIndex = dayIndex;
+      }
+      else if (this.scheduleMode === 'Weekday/Weekend') {
+        previousDayIndex = day === 'monday' ? 5 : 0; // Saturday for weekend, Monday for weekday
+      }
+      else
+      {
+        previousDayIndex = (dayIndex - 1 + 7) % 7;
+      }
+      const previousDay = this.dayOrder[previousDayIndex];
       const previousDaySlots = this.thermostatSchedule[previousDay];
       // Find last valid temperature from previous day
       let previousDayLastTemp = 0;
@@ -938,7 +961,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     
     // Handle different schedule modes
     let containersToUpdate = [];
-    if (this.scheduleMode === '24 Hour') {
+    if (this.scheduleMode === '24 hour') {
       // In 24 hour mode, update all visible containers
       containersToUpdate = this.dayOrder.map(day => this.querySelector(`#${day}`));
     } else if (this.scheduleMode === 'Weekday/Weekend') {
