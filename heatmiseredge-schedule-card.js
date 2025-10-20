@@ -75,6 +75,10 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     this.dayOrder.forEach(d => {
       this._lastRenderedSchedule[d] = JSON.stringify(this.thermostatSchedule[d] || []);
     });
+
+    // device list / active device selection
+    this.deviceIds = [];           // will be populated from config/updateContent
+    this.activeDeviceId = null;    // currently selected device in UI
   }
   
   set hass(hass) {
@@ -99,19 +103,25 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
   }
   
   static getConfigForm() {
+    const heatmiserEdgeSelector = { 
+      device: { 
+        integration: "heatmiser_edge",
+        entity: {
+          domain: "climate"
+        }
+      } 
+    }
     return {
       schema: [
         { 
-          name: "device", 
+          name: "device (required)", 
+          required: true,
           multiple: true,
-          selector: { 
-            device: { 
-              integration: "heatmiser_edge",
-              entity: {
-                domain: "climate"
-              }
-            } 
-          } 
+          selector: heatmiserEdgeSelector
+        },
+        {
+          name: "device2 (not needed)", 
+          selector: heatmiserEdgeSelector
         }
       ],
       computeHelper: (schema) => {
@@ -197,8 +207,19 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
   }
   
   updateContent(content, firstRender) {
-    const deviceId = this.config.device;
-    this.activeDeviceId = deviceId; // Select the active device
+    if (this.config.device instanceof Array) {
+      this.activeDeviceId = this.config.device[0]; // On initial load, select the first named device as the active device
+      this.allDeviceIds = this.config.device;
+    }
+    else {
+      this.activeDeviceId = this.config.device;
+      this.allDeviceIds = [this.config.device];
+    }
+
+    // keep deviceIds in sync for the UI elements (checkbox list and selector)
+    this.deviceIds = Array.isArray(this.allDeviceIds) ? [...this.allDeviceIds] : [];
+
+    const deviceId = this.activeDeviceId; // Set temporary alias
     const previousScheduleModeState = this.scheduleMode;
     this.scheduleMode = this.getEntityState(this.findEntityFromDevice(deviceId,"select.","_schedule_mode"));
     this.climateEntity = this.findEntityFromDevice(deviceId,"climate.","_thermostat");
@@ -226,10 +247,10 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     
     this.updateScheduleDisplay();
     this.updateTimeIndicator();  // Add this line
-
+    
     // Check to see if thermostat is in nominal operation mode (or any things we need to alert the end user about)
     let devicePower = this.getEntityState(this.findEntityFromDevice(this.activeDeviceId,"select.","_device_power"),"unknown");
-        let operationMode = this.getEntityState(this.findEntityFromDevice(this.activeDeviceId,"select.","_operation_mode"),"unknown");
+    let operationMode = this.getEntityState(this.findEntityFromDevice(this.activeDeviceId,"select.","_operation_mode"),"unknown");
     if (devicePower === "Off") {
       this.setAlert(`Thermostat device is turned off. Please turn back on for schedule to take effect.`,`error`);
     }
@@ -325,6 +346,10 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     const style = `
       <style>
         .week-container { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial; padding: 12px; }
+        .device-controls { display:flex; flex-direction:column; gap:6px; margin-bottom:10px; }
+        .device-selector-row { display:flex; gap:8px; align-items:center; }
+        .device-checkboxes { display:flex; gap:8px; flex-wrap:wrap; }
+        .device-checkboxes label { font-size:13px; color:#333; display:flex; gap:6px; align-items:center; }
         .day-row { margin: 16px 0; }
         .day-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
         .day-label { font-size:18px; font-weight:bold; }
@@ -371,13 +396,26 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         <!-- Alert placeholder: controlled via setAlert(text,severity) -->
         <ha-alert id="card-alert" alert-type="info" style="display:none;"></ha-alert>
 
+        <!-- Device selector and checkboxes -->
+        <div class="device-controls">
+          <div class="device-selector-row">
+            <label for="device-selector">Device:</label>
+            <select id="device-selector">
+              ${this.deviceIds.map(id => `<option value="${id}" ${id === this.activeDeviceId ? 'selected' : ''}>${id}</option>`).join('')}
+            </select>
+          </div>
+          <div id="device-checkboxes" class="device-checkboxes">
+            ${this.deviceIds.map(id => `<label><input type="checkbox" data-device="${id}" ${id === this.activeDeviceId ? 'checked' : ''}> ${id}</label>`).join('')}
+          </div>
+        </div>
+
         <div class="thermostat-header">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <div class="entity-info">
               <div class="entity-id"></div>
               <div class="entity-state">Loading...</div>
               <div class="last-update">Last updated: Never</div>
-    
+
             </div>
             <ha-button appearance="filled" size="medium" class="refresh-btn">
               <svg style="width: 16px; height: 16px;" viewBox="0 0 24 24">
@@ -508,6 +546,46 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
       refreshBtn.addEventListener('click', () => {
         this.readScheduleFromDevice(this.activeDeviceId);
         this.updateScheduleDisplay();
+      });
+    }
+
+    // Device selector change handler
+    const deviceSelector = this.querySelector('#device-selector');
+    if (deviceSelector) {
+      deviceSelector.addEventListener('change', (e) => {
+        const newId = e.target.value;
+        if (newId && newId !== this.activeDeviceId) {
+          this.activeDeviceId = newId;
+          // reload schedule for new active device
+          this.readScheduleFromDevice(this.activeDeviceId);
+          this.updateScheduleDisplay();
+          // update header/summary immediately
+          this.updateContent(this.content, false);
+        }
+      });
+    }
+
+    // Device checkboxes handler - updates this.deviceIds to currently checked items
+    const checkboxContainer = this.querySelector('#device-checkboxes');
+    if (checkboxContainer) {
+      checkboxContainer.querySelectorAll('input[type="checkbox"][data-device]').forEach(cb => {
+        cb.addEventListener('change', (e) => {
+          const checked = Array.from(checkboxContainer.querySelectorAll('input[type="checkbox"][data-device]:checked')).map(c => c.getAttribute('data-device'));
+          this.deviceIds = checked;
+          // ensure activeDeviceId remains selected (if it was unchecked, pick first checked)
+          if (!this.deviceIds.includes(this.activeDeviceId)) {
+            this.activeDeviceId = this.deviceIds[0] || null;
+            // update selector UI to reflect change
+            const sel = this.querySelector('#device-selector');
+            if (sel) sel.value = this.activeDeviceId || '';
+            // reload schedule for new active device
+            if (this.activeDeviceId) {
+              this.readScheduleFromDevice(this.activeDeviceId);
+              this.updateScheduleDisplay();
+              this.updateContent(this.content, false);
+            }
+          }
+        });
       });
     }
     
