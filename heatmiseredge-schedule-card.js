@@ -1,5 +1,8 @@
 // Heatmiser Thermostat Custom Card (Plain JS for type: js)
 
+// Debug setting - set to true to enable debug console.log messages
+const DEBUG = false;
+
 class HeatmiserEdgeScheduleCard extends HTMLElement {
   constructor() {
     super();
@@ -82,7 +85,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
   }
   
   set hass(hass) {
-    console.log("Hass object updated at time "+new Date().toLocaleTimeString());
+    if (DEBUG) console.log("Hass object updated at time "+new Date().toLocaleTimeString());
     this._hass = hass; // Store the hass object for later use
     if (!this.content) {
       this.innerHTML = `
@@ -94,10 +97,10 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         `;
       this.content = this.querySelector(".card-content");
       this.updateContent(this.content,true);
-      console.log("Completed initial load")
+      if (DEBUG) console.log("Completed initial load")
     }
     else{
-      console.log("Starting data refresh at time "+new Date().toLocaleTimeString());
+      if (DEBUG) console.log("Starting data refresh at time "+new Date().toLocaleTimeString());
       this.updateContent(this.content,false);
     }
   }
@@ -149,7 +152,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
   
   updateNumberValue(entity,value){
     if (!this._hass) return;
-    console.log(`Updating ${entity} to ${value}`);
+    if (DEBUG) console.log(`Updating ${entity} to ${value}`);
     this._hass.callService('number', 'set_value', {
       entity_id: entity,
       value: value
@@ -158,7 +161,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
   
   updateTimeValue(entity, value) {
     if (!this._hass) return;
-    console.log(`Updating ${entity} to ${value}`);
+    if (DEBUG) console.log(`Updating ${entity} to ${value}`);
     if (value.length === 5) {
       value += ':00';
     }
@@ -330,7 +333,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
       }
     }
     this.convertScheduleToRegister(); // Update register representation at the same time
-    console.log(this.thermostatSchedule)
+    if (DEBUG) console.log(this.thermostatSchedule)
     
     // // Sort each day's schedule by time
     // for (const day of Object.values(dayMap)) {
@@ -346,7 +349,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
   }
   
   renderFramework() {
-    console.log("Starting to render framework at time "+new Date().toLocaleTimeString());
+    if (DEBUG) console.log("Starting to render framework at time "+new Date().toLocaleTimeString());
     const style = `
       <style>
         .week-container { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial; padding: 12px; }
@@ -550,7 +553,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
   }
   
   attachEventHandlers() {
-    console.log("Attaching event handlers");
+    if (DEBUG) console.log("Attaching event handlers");
     
     // Add refresh button handler
     const refreshBtn = this.querySelector('.refresh-btn');
@@ -847,7 +850,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
   
   
   updateScheduleDisplay() {
-    console.log("Updating schedule display at " + new Date().toLocaleTimeString());
+    if (DEBUG) console.log("Updating schedule display at " + new Date().toLocaleTimeString());
     
     let visibleDays;
     if (this.scheduleMode === '24 hour') {
@@ -864,7 +867,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
       const currentSerialized = JSON.stringify(slots || []);
       // Skip updating this day if nothing changed since last render
       if (this._lastRenderedSchedule[day] === currentSerialized) {
-        console.log(`No changes for ${day}, skipping update.`);
+        if (DEBUG) console.log(`No changes for ${day}, skipping update.`);
         return;
       }
       
@@ -958,7 +961,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         
         // Mark this day's schedule as rendered
         this._lastRenderedSchedule[day] = currentSerialized;
-        console.log(`Updated display for ${day}`)
+        if (DEBUG) console.log(`Updated display for ${day}`)
       }
     });
   }
@@ -1046,7 +1049,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
   }
     
     setConfig(config) {
-      console.log("Setting config");
+      if (DEBUG) console.log("Setting config");
       if (!config.device) {
         throw new Error("You need to define a device");
       }
