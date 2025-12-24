@@ -377,9 +377,13 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
       nameEl.textContent = name;
 
       const tempPill = this.createStatusPill(`${temp}°C`, 'neutral');
-      const schedulePill = this.createStatusPill(`Schedule: ${scheduleMode}`, this.getStatusClass('schedule', scheduleMode));
-      const operationPill = this.createStatusPill(`Mode: ${operationMode}`, this.getStatusClass('operation', operationMode));
-      const powerPill = this.createStatusPill(`Power: ${devicePower}`, this.getStatusClass('power', devicePower));
+      const scheduleModeEntity = this.findEntityFromDevice(deviceId, 'select.', '_schedule_mode');
+      const operationModeEntity = this.findEntityFromDevice(deviceId, 'select.', '_operation_mode');
+      const devicePowerEntity = this.findEntityFromDevice(deviceId, 'select.', '_device_power');
+      
+      const schedulePill = this.createStatusPill(`Schedule: ${scheduleMode}`, this.getStatusClass('schedule', scheduleMode), scheduleModeEntity);
+      const operationPill = this.createStatusPill(`Mode: ${operationMode}`, this.getStatusClass('operation', operationMode), operationModeEntity);
+      const powerPill = this.createStatusPill(`Power: ${devicePower}`, this.getStatusClass('power', devicePower), devicePowerEntity);
 
       row.appendChild(nameEl);
       row.appendChild(tempPill);
@@ -414,6 +418,8 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         .entity-row { color:#333; font-weight:500; display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
         .entity-row .name { font-weight:600; color:#222; }
         .pill { display:inline-flex; align-items:center; gap:4px; padding:4px 8px; border-radius:999px; font-size:12px; line-height:1.2; border:1px solid transparent; }
+        .pill.clickable { cursor:pointer; transition:opacity 0.2s; }
+        .pill.clickable:hover { opacity:0.8; }
         .pill-neutral { background:#f2f4f7; color:#333; border-color:#e0e4ea; }
         .pill-info { background:#e8f4fd; color:#0b6fa4; border-color:#c4e0f5; }
         .pill-warning { background:#fff4e5; color:#b26a00; border-color:#ffe2b7; }
@@ -1197,11 +1203,30 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
       return defaultValue;
     }
 
-    createStatusPill(text, level='neutral') {
+    createStatusPill(text, level='neutral', entityId=null) {
       const pill = document.createElement('span');
       pill.className = `pill pill-${level}`;
       pill.textContent = text;
+      
+      if (entityId) {
+        pill.classList.add('clickable');
+        pill.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.openMoreInfo(entityId);
+        });
+      }
+      
       return pill;
+    }
+    
+    openMoreInfo(entityId) {
+      if (!entityId) return;
+      const event = new Event('hass-more-info', {
+        bubbles: true,
+        composed: true
+      });
+      event.detail = { entityId };
+      this.dispatchEvent(event);
     }
 
     getStatusClass(type, value) {
