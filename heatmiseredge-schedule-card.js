@@ -352,16 +352,11 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
 
   // Render target device info list (name, current temp, schedule mode, operation mode, power)
   updateEntityInfoDisplay() {
-    const listEl = this.content?.querySelector('.entity-list');
-    if (!listEl || !this._hass) return;
-    listEl.innerHTML = '';
+    if (!this._hass) return;
 
-    const devices = (this.targetDeviceIds && this.targetDeviceIds.length > 0)
-      ? this.targetDeviceIds
-      : (this.activeDeviceId ? [this.activeDeviceId] : []);
+    const devices = this.deviceIds || [];
 
     devices.forEach(deviceId => {
-      const name = this.findDeviceNameFromId(deviceId) || deviceId;
       const climate = this.findEntityFromDevice(deviceId, 'climate.', '_thermostat');
       const tempState = climate ? this._hass.states[climate] : null;
       const temp = tempState ? tempState.attributes.temperature : 'N/A';
@@ -370,30 +365,31 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
       const operationMode = this.getEntityState(this.findEntityFromDevice(deviceId, 'select.', '_operation_mode'), 'unknown');
       const devicePower = this.getEntityState(this.findEntityFromDevice(deviceId, 'select.', '_device_power'), 'unknown');
 
-      const row = document.createElement('div');
-      row.className = 'entity-row';
-      const nameEl = document.createElement('span');
-      nameEl.className = 'name';
-      nameEl.textContent = name;
-
-      const tempPill = this.createStatusPill(`${temp}°C`, 'neutral', climate);
       const scheduleModeEntity = this.findEntityFromDevice(deviceId, 'select.', '_schedule_mode');
       const operationModeEntity = this.findEntityFromDevice(deviceId, 'select.', '_operation_mode');
       const devicePowerEntity = this.findEntityFromDevice(deviceId, 'select.', '_device_power');
-      
-      const schedulePill = this.createStatusPill(`Schedule: ${scheduleMode}`, this.getStatusClass('schedule', scheduleMode), scheduleModeEntity);
-      const operationPill = this.createStatusPill(`Mode: ${operationMode}`, this.getStatusClass('operation', operationMode), operationModeEntity);
-      const powerPill = this.createStatusPill(`Power: ${devicePower}`, this.getStatusClass('power', devicePower), devicePowerEntity);
 
-      row.appendChild(nameEl);
-      row.appendChild(tempPill);
-      row.appendChild(schedulePill);
-      row.appendChild(operationPill);
-      row.appendChild(powerPill);
-      listEl.appendChild(row);
+      // Find the pills container for this device
+      const row = this.content?.querySelector(`.device-checkbox-row[data-device-id="${deviceId}"]`);
+      if (!row) return;
+      
+      const pillsContainer = row.querySelector('.device-pills');
+      if (pillsContainer) {
+        pillsContainer.innerHTML = '';
+        
+        const tempPill = this.createStatusPill(`${temp}°C`, 'neutral', climate);
+        const schedulePill = this.createStatusPill(`Schedule: ${scheduleMode}`, this.getStatusClass('schedule', scheduleMode), scheduleModeEntity);
+        const operationPill = this.createStatusPill(`Mode: ${operationMode}`, this.getStatusClass('operation', operationMode), operationModeEntity);
+        const powerPill = this.createStatusPill(`Power: ${devicePower}`, this.getStatusClass('power', devicePower), devicePowerEntity);
+        
+        pillsContainer.appendChild(tempPill);
+        pillsContainer.appendChild(schedulePill);
+        pillsContainer.appendChild(operationPill);
+        pillsContainer.appendChild(powerPill);
+      }
     });
 
-    const lastUpdate = this.content.querySelector('.last-update');
+    const lastUpdate = this.content?.querySelector('.last-update');
     if (lastUpdate) {
       lastUpdate.textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
     }
@@ -412,11 +408,9 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         .device-controls { display:flex; flex-direction:column; gap:6px; margin-bottom:10px; }
         .device-selector-row { display:flex; gap:8px; align-items:center; }
         .device-checkboxes { display:flex; flex-direction:column; gap:8px; flex-wrap:wrap; }
-        .device-checkboxes label { font-size:13px; color:#333; display:flex; gap:6px; align-items:center; padding:6px 10px; border:1px solid #d0d0d0; border-radius:8px; background:#fafafa; box-shadow: inset 0 0 0 1px #f5f5f5; width:fit-content; }
+        .device-checkbox-row { display:flex; gap:8px; align-items:center; }
+        .device-pills { display:flex; gap:4px; flex-wrap:wrap; }
         .device-checkboxes input[type="checkbox"] { width:16px; height:16px; accent-color: var(--primary-color); }
-        .entity-list { display:flex; flex-direction:column; gap:4px; }
-        .entity-row { color:#333; font-weight:500; display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
-        .entity-row .name { font-weight:600; color:#222; }
         .pill { display:inline-flex; align-items:center; gap:4px; padding:4px 8px; border-radius:999px; font-size:12px; line-height:1.2; border:1px solid transparent; }
         .pill.clickable { cursor:pointer; transition:opacity 0.2s; }
         .pill.clickable:hover { opacity:0.8; }
@@ -490,8 +484,6 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         <div class="thermostat-header">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <div class="entity-info">
-            <b>Selected devices:</b>
-              <div class="entity-list"></div>
               <div class="last-update">Last updated: Never</div>
 
             </div>
@@ -689,6 +681,10 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         if (targetDeviceContainer) {
           targetDeviceContainer.innerHTML = '';
           (this.deviceIds || []).forEach(id => {
+            const row = document.createElement('div');
+            row.className = 'device-checkbox-row';
+            row.setAttribute('data-device-id', id);
+            
             const label = document.createElement('label');
             const cb = document.createElement('input');
             cb.type = 'checkbox';
@@ -696,7 +692,24 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
             cb.checked = (this.targetDeviceIds || []).includes(id);
             label.appendChild(cb);
             label.appendChild(document.createTextNode(this.findDeviceNameFromId(id) || id));
-            targetDeviceContainer.appendChild(label);
+            label.style.fontSize = '13px';
+            label.style.color = '#333';
+            label.style.display = 'flex';
+            label.style.gap = '6px';
+            label.style.alignItems = 'center';
+            label.style.padding = '6px 10px';
+            label.style.border = '1px solid #d0d0d0';
+            label.style.borderRadius = '8px';
+            label.style.background = '#fafafa';
+            label.style.boxShadow = 'inset 0 0 0 1px #f5f5f5';
+            label.style.width = 'fit-content';
+            
+            const pillsContainer = document.createElement('div');
+            pillsContainer.className = 'device-pills';
+            
+            row.appendChild(label);
+            row.appendChild(pillsContainer);
+            targetDeviceContainer.appendChild(row);
           });
 
           const updateTargetDevices = () => {
