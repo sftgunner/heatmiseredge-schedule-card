@@ -372,7 +372,20 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
 
       const row = document.createElement('div');
       row.className = 'entity-row';
-      row.innerHTML = `${name}: ${temp}°C <small>(Schedule: ${scheduleMode} · Mode: ${operationMode} · Power: ${devicePower})</small>`;
+      const nameEl = document.createElement('span');
+      nameEl.className = 'name';
+      nameEl.textContent = name;
+
+      const tempPill = this.createStatusPill(`${temp}°C`, 'neutral');
+      const schedulePill = this.createStatusPill(`Schedule: ${scheduleMode}`, this.getStatusClass('schedule', scheduleMode));
+      const operationPill = this.createStatusPill(`Mode: ${operationMode}`, this.getStatusClass('operation', operationMode));
+      const powerPill = this.createStatusPill(`Power: ${devicePower}`, this.getStatusClass('power', devicePower));
+
+      row.appendChild(nameEl);
+      row.appendChild(tempPill);
+      row.appendChild(schedulePill);
+      row.appendChild(operationPill);
+      row.appendChild(powerPill);
       listEl.appendChild(row);
     });
 
@@ -397,6 +410,15 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         .device-checkboxes { display:flex; gap:8px; flex-wrap:wrap; }
         .device-checkboxes label { font-size:13px; color:#333; display:flex; gap:6px; align-items:center; padding:6px 10px; border:1px solid #d0d0d0; border-radius:8px; background:#fafafa; box-shadow: inset 0 0 0 1px #f5f5f5; }
         .device-checkboxes input[type="checkbox"] { width:16px; height:16px; accent-color: var(--primary-color); }
+        .entity-list { display:flex; flex-direction:column; gap:4px; }
+        .entity-row { color:#333; font-weight:500; display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+        .entity-row .name { font-weight:600; color:#222; }
+        .pill { display:inline-flex; align-items:center; gap:4px; padding:4px 8px; border-radius:999px; font-size:12px; line-height:1.2; border:1px solid transparent; }
+        .pill-neutral { background:#f2f4f7; color:#333; border-color:#e0e4ea; }
+        .pill-info { background:#e8f4fd; color:#0b6fa4; border-color:#c4e0f5; }
+        .pill-warning { background:#fff4e5; color:#b26a00; border-color:#ffe2b7; }
+        .pill-error { background:#fdecea; color:#b71c1c; border-color:#f9c9c4; }
+        .pill-success { background:#e6f4ea; color:#256029; border-color:#c8e6cf; }
         .day-row { margin: 16px 0; }
         .day-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
         .day-label { font-size:18px; font-weight:bold; }
@@ -1173,6 +1195,34 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         return entity.state;
       }
       return defaultValue;
+    }
+
+    createStatusPill(text, level='neutral') {
+      const pill = document.createElement('span');
+      pill.className = `pill pill-${level}`;
+      pill.textContent = text;
+      return pill;
+    }
+
+    getStatusClass(type, value) {
+      const v = (value || '').toString().toLowerCase();
+      switch (type) {
+        case 'power':
+          if (v === 'off') return 'error';
+          if (v === 'on') return 'success';
+          if (v === 'unknown' || v === 'unavailable') return 'warning';
+          return 'neutral';
+        case 'operation':
+          if (v === 'schedule') return 'success';
+          if (v === 'override' || v === 'holiday') return 'info';
+          if (v === 'unknown' || v === 'unavailable') return 'warning';
+          return 'warning';
+        case 'schedule':
+          if (v === 'unknown' || v === 'unavailable') return 'warning';
+          return 'neutral';
+        default:
+          return 'neutral';
+      }
     }
     
     // New: setAlert(text, severity)
