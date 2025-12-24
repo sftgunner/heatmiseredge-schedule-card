@@ -1,7 +1,7 @@
 // Heatmiser Thermostat Custom Card (Plain JS for type: js)
 
 // Debug setting - set to true to enable debug console.log messages
-const DEBUG = false;
+const DEBUG = true;
 
 class HeatmiserEdgeScheduleCard extends HTMLElement {
   constructor() {
@@ -82,6 +82,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     // device list / active device selection
     this.deviceIds = [];           // will be populated from config/updateContent
     this.activeDeviceId = null;    // currently selected device in UI
+    this.targetDeviceIds = [];     // devices to apply schedule to
   }
   
   set hass(hass) {
@@ -218,6 +219,10 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
 
     // keep deviceIds in sync for the UI elements (checkbox list and selector)
     this.deviceIds = Array.isArray(this.allDeviceIds) ? [...this.allDeviceIds] : [];
+    // default targets to all devices on first load
+    if (!this.targetDeviceIds || this.targetDeviceIds.length === 0) {
+      this.targetDeviceIds = [...this.deviceIds];
+    }
 
     const deviceId = this.activeDeviceId; // Set temporary alias
     const previousScheduleModeState = this.scheduleMode;
@@ -351,7 +356,8 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         .device-controls { display:flex; flex-direction:column; gap:6px; margin-bottom:10px; }
         .device-selector-row { display:flex; gap:8px; align-items:center; }
         .device-checkboxes { display:flex; gap:8px; flex-wrap:wrap; }
-        .device-checkboxes label { font-size:13px; color:#333; display:flex; gap:6px; align-items:center; }
+        .device-checkboxes label { font-size:13px; color:#333; display:flex; gap:6px; align-items:center; padding:6px 10px; border:1px solid #d0d0d0; border-radius:8px; background:#fafafa; box-shadow: inset 0 0 0 1px #f5f5f5; }
+        .device-checkboxes input[type="checkbox"] { width:16px; height:16px; accent-color: var(--primary-color); }
         .day-row { margin: 16px 0; }
         .day-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
         .day-label { font-size:18px; font-weight:bold; }
@@ -405,10 +411,10 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
           <label for="active-device-ha-selector" style="display:block; margin-bottom:4px;">Load schedule from:</label>
           <ha-selector id="active-device-ha-selector"></ha-selector>
         </div>
-        <!-- Target device selector (ha-selector) -->
+        <!-- Target device selector (checkbox list) -->
         <div style="margin:8px 0;">
-          <label for="target-device-ha-selector" style="display:block; margin-bottom:4px;">Apply schedule to:</label>
-          <ha-selector id="target-device-ha-selector"></ha-selector>
+          <label style="display:block; margin-bottom:4px;">Apply schedule to:</label>
+          <div id="target-device-checkboxes" class="device-checkboxes"></div>
         </div>
         <div class="thermostat-header">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -601,38 +607,39 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
       });
     }
 
-        // Initialize ha-selector for active device selector
-    const targetDeviceHaSelector = this.querySelector('#target-device-ha-selector');
-    if (targetDeviceHaSelector) {
-      try {
-        targetDeviceHaSelector.selector = {
-          select: {
-            placeholder: 'Select a device',
-            multiple: 'true',
-            options: (this.deviceIds || []).map(id => ({ value: id, label: this.findDeviceNameFromId(id) }))
-          }
-        };
-      } catch (err) {
-        console.warn('Unable to set selector property on ha-selector', err);
-      }
+        // Render simple checkbox list for target devices
+        const targetDeviceContainer = this.querySelector('#target-device-checkboxes');
+        if (targetDeviceContainer) {
+          targetDeviceContainer.innerHTML = '';
+          (this.deviceIds || []).forEach(id => {
+            const label = document.createElement('label');
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.value = id;
+            cb.checked = (this.targetDeviceIds || []).includes(id);
+            label.appendChild(cb);
+            label.appendChild(document.createTextNode(this.findDeviceNameFromId(id) || id));
+            targetDeviceContainer.appendChild(label);
+          });
 
-      // if (this.activeDeviceId) {
-      //   try { targetDeviceHaSelector.value = this.activeDeviceId; } catch (_) {}
-      // }
+          const updateTargetDevices = () => {
+            const cbs = targetDeviceContainer.querySelectorAll('input[type="checkbox"]');
+            const selected = Array.from(cbs)
+              .filter(cb => cb.checked)
+              .map(cb => cb.value);
+            this.targetDeviceIds = selected;
 
-      targetDeviceHaSelector.addEventListener('value-changed', (ev) => {
-        const val = ev?.detail?.value;
-        if (val == "") {
-          this.setAlert("Schedule will not be applied to any devices. Please select at least one target device.","error");
+            if (selected.length === 0) {
+              this.setAlert("Schedule will not be applied to any devices. Please select at least one target device.","error");
+              if (DEBUG) console.log("Target devices cleared via checkbox");
+            } else {
+              this.setAlert("","none");
+              if (DEBUG) console.log(`Target device(s) for schedule application changed to ${selected.join(', ')}`);
+            }
+          };
+
+          targetDeviceContainer.addEventListener('change', updateTargetDevices);
         }
-        else{
-          this.setAlert("","none"); // Clear any existing alerts
-        }
-        if (val) {
-          console.log(`Target device(s) for schedule application changed to ${val}`);
-        }
-      });
-    }
     
     let visibleDays;
     if (this.scheduleMode === 'Weekday/Weekend') {
