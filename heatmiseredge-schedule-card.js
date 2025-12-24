@@ -219,9 +219,9 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
 
     // keep deviceIds in sync for the UI elements (checkbox list and selector)
     this.deviceIds = Array.isArray(this.allDeviceIds) ? [...this.allDeviceIds] : [];
-    // default targets to all devices on first load
+    // default targets to the active device on first load
     if (!this.targetDeviceIds || this.targetDeviceIds.length === 0) {
-      this.targetDeviceIds = [...this.deviceIds];
+      this.targetDeviceIds = this.activeDeviceId ? [this.activeDeviceId] : [...this.deviceIds];
     }
 
     const deviceId = this.activeDeviceId; // Set temporary alias
@@ -581,14 +581,14 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         console.warn('Unable to set selector property on ha-selector', err);
       }
 
-      // // if activedevicehaselector.value is blank, then try and replace with activeDeviceId
+      // if activedevicehaselector.value is blank, then try and replace with activeDeviceId
       // FOR SOME REASON, ADDING THIS CODE IN BREAKS THE ABILITY TO CHANGE THE SELECTOR BACK TO THE ORIGINAL VALUE AFTER CHANGING IT ONCE
-      // if (!activeDeviceHaSelector.value || activeDeviceHaSelector.value === "") {
-      //   if (this.activeDeviceId) {
-      //     console.log(`First load, setting activeDeviceHaSelector value to default ${this.activeDeviceId}`);
-      //     try { activeDeviceHaSelector.value = this.activeDeviceId; } catch (_) {}
-      //   }
-      // }
+      if (!activeDeviceHaSelector.value || activeDeviceHaSelector.value === "") {
+        if (this.activeDeviceId) {
+          console.log(`First load, setting activeDeviceHaSelector value to default ${this.activeDeviceId}`);
+          try { activeDeviceHaSelector.value = this.activeDeviceId; } catch (_) {}
+        }
+      }
 
       activeDeviceHaSelector.addEventListener('value-changed', (ev) => {
         const val = ev?.detail?.value;
