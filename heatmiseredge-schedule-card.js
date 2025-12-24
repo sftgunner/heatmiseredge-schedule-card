@@ -406,6 +406,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         <!-- Alert placeholder: controlled via setAlert(text,severity) -->
         <ha-alert id="card-alert" alert-type="info" style="display:none;"></ha-alert>
 
+        ${ (this.deviceIds && this.deviceIds.length > 1) ? `
         <!-- Active device selector (ha-selector) -->
         <div style="margin:8px 0;">
           <label for="active-device-ha-selector" style="display:block; margin-bottom:4px;">Load schedule from:</label>
@@ -416,6 +417,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
           <label style="display:block; margin-bottom:4px;">Apply schedule to:</label>
           <div id="target-device-checkboxes" class="device-checkboxes"></div>
         </div>
+        ` : '' }
         <div class="thermostat-header">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <div class="entity-info">
