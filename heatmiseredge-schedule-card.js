@@ -474,13 +474,17 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
           <label for="active-device-ha-selector" style="display:block; margin-bottom:4px;">Load schedule from:</label>
           <ha-selector id="active-device-ha-selector"></ha-selector>
         </div>
-        <!-- Target device selector (checkbox list) -->
+        ` : '' }
+        
+        <!-- Target device selector (checkbox list) and status pills (always rendered) -->
         <div style="margin:8px 0;">
+          ${ (this.deviceIds && this.deviceIds.length > 1) ? `
           <label style="display:block; margin-bottom:4px;">Apply schedule to:</label>
+          ` : '' }
           <div id="target-device-checkboxes" class="device-checkboxes"></div>
         </div>
-        <hr style="margin:16px 0 0 0;">
-        ` : '' }
+        
+        ${ (this.deviceIds && this.deviceIds.length > 1) ? `<hr style="margin:16px 0 0 0;">` : '' }
         <div class="thermostat-header">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <div class="entity-info">
@@ -703,6 +707,11 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
             label.style.background = '#fafafa';
             label.style.boxShadow = 'inset 0 0 0 1px #f5f5f5';
             label.style.width = 'fit-content';
+            
+            // Hide checkbox and label for single device, but keep pills visible
+            if (this.deviceIds.length === 1) {
+              label.style.display = 'none';
+            }
             
             const pillsContainer = document.createElement('div');
             pillsContainer.className = 'device-pills';
