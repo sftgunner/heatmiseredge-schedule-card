@@ -90,7 +90,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     this._hass = hass; // Store the hass object for later use
     if (!this.content) {
       this.innerHTML = `
-        <ha-card header="">
+        <ha-card header="${this.config && this.config.title ? this.config.title : ''}">
           <div class="card-content">
           Loading content...
           </div>
@@ -109,6 +109,13 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
   static getConfigForm() {
     return {
       schema: [
+        {
+          name: "title",
+          selector: {
+            text: {}
+          },
+          required: false
+        },
         { 
           name: "device", 
           required: true,
@@ -254,6 +261,12 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     
     this.updateScheduleDisplay();
     this.updateTimeIndicator();  // Add this line
+
+    // Update card header/title if present
+    const cardEl = this.querySelector('ha-card');
+    if (cardEl && this.config && this.config.title) {
+      cardEl.setAttribute('header', this.config.title);
+    }
     
     // Check to see if thermostat is in nominal operation mode (or any things we need to alert the end user about)
     let devicePower = this.getEntityState(this.findEntityFromDevice(this.activeDeviceId,"select.","_device_power"),"unknown");
