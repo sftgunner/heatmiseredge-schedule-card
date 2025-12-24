@@ -408,7 +408,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     if (DEBUG) console.log("Starting to render framework at time "+new Date().toLocaleTimeString());
     const style = `
       <style>
-        .week-container { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial; padding: 12px; }
+        .week-container { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial; }
         .device-controls { display:flex; flex-direction:column; gap:6px; margin-bottom:10px; }
         .device-selector-row { display:flex; gap:8px; align-items:center; }
         .device-checkboxes { display:flex; gap:8px; flex-wrap:wrap; }
