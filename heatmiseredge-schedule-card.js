@@ -411,8 +411,8 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         .week-container { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial; }
         .device-controls { display:flex; flex-direction:column; gap:6px; margin-bottom:10px; }
         .device-selector-row { display:flex; gap:8px; align-items:center; }
-        .device-checkboxes { display:flex; gap:8px; flex-wrap:wrap; }
-        .device-checkboxes label { font-size:13px; color:#333; display:flex; gap:6px; align-items:center; padding:6px 10px; border:1px solid #d0d0d0; border-radius:8px; background:#fafafa; box-shadow: inset 0 0 0 1px #f5f5f5; }
+        .device-checkboxes { display:flex; flex-direction:column; gap:8px; flex-wrap:wrap; }
+        .device-checkboxes label { font-size:13px; color:#333; display:flex; gap:6px; align-items:center; padding:6px 10px; border:1px solid #d0d0d0; border-radius:8px; background:#fafafa; box-shadow: inset 0 0 0 1px #f5f5f5; width:fit-content; }
         .device-checkboxes input[type="checkbox"] { width:16px; height:16px; accent-color: var(--primary-color); }
         .entity-list { display:flex; flex-direction:column; gap:4px; }
         .entity-row { color:#333; font-weight:500; display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
