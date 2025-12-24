@@ -485,19 +485,6 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         </div>
         
         ${ (this.deviceIds && this.deviceIds.length > 1) ? `<hr style="margin:16px 0 0 0;">` : '' }
-        <div class="thermostat-header">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <div class="entity-info">
-              <div class="last-update">Last updated: Never</div>
-
-            </div>
-            <ha-button appearance="filled" size="medium" class="refresh-btn">
-              <svg style="width: 16px; height: 16px;" viewBox="0 0 24 24">
-                <path fill="currentColor" d="M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z"/>
-              </svg>
-            </ha-button>
-          </div>
-        </div>
     `;
     let visibleDays;
     if (this.scheduleMode === '24 hour') {
@@ -573,7 +560,19 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
           </div>
         </div>`;
     });
-    htmlContent += `</div>`;
+    htmlContent += `
+        <hr style="margin:32px 0 16px 0;">
+        <div class="thermostat-header">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="entity-info">
+              <div class="last-update" style="font-size:12px; color:#999;">Last updated: Never</div>
+            </div>
+            <ha-button size="small" class="refresh-btn" style="--mdc-theme-primary: var(--text-color); opacity: 0.7;">
+              Force reload
+            </ha-button>
+          </div>
+        </div>
+    </div>`;
     this.content.innerHTML = style + htmlContent;
   }
   
