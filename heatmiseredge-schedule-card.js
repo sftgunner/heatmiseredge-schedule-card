@@ -109,7 +109,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     return {
       schema: [
         { 
-          name: "device(s) (required)", 
+          name: "device", 
           required: true,
           selector: {
             device: { 
