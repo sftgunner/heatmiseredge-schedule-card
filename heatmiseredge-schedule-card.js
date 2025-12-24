@@ -376,7 +376,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
       nameEl.className = 'name';
       nameEl.textContent = name;
 
-      const tempPill = this.createStatusPill(`${temp}°C`, 'neutral');
+      const tempPill = this.createStatusPill(`${temp}°C`, 'neutral', climate);
       const scheduleModeEntity = this.findEntityFromDevice(deviceId, 'select.', '_schedule_mode');
       const operationModeEntity = this.findEntityFromDevice(deviceId, 'select.', '_operation_mode');
       const devicePowerEntity = this.findEntityFromDevice(deviceId, 'select.', '_device_power');
