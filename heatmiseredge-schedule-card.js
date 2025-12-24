@@ -106,25 +106,20 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
   }
   
   static getConfigForm() {
-    const heatmiserEdgeSelector = { 
-      device: { 
-        integration: "heatmiser_edge",
-        entity: {
-          domain: "climate"
-        }
-      } 
-    }
     return {
       schema: [
         { 
-          name: "device (required)", 
+          name: "device(s) (required)", 
           required: true,
-          multiple: true,
-          selector: heatmiserEdgeSelector
-        },
-        {
-          name: "device2 (not needed)", 
-          selector: heatmiserEdgeSelector
+          selector: {
+            device: { 
+              integration: "heatmiser_edge",
+              entity: {
+                domain: "climate"
+              },
+              multiple: true
+            } 
+          }
         }
       ],
       computeHelper: (schema) => {
@@ -580,9 +575,14 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         console.warn('Unable to set selector property on ha-selector', err);
       }
 
-      if (this.activeDeviceId) {
-        try { activeDeviceHaSelector.value = this.activeDeviceId; } catch (_) {}
-      }
+      // // if activedevicehaselector.value is blank, then try and replace with activeDeviceId
+      // FOR SOME REASON, ADDING THIS CODE IN BREAKS THE ABILITY TO CHANGE THE SELECTOR BACK TO THE ORIGINAL VALUE AFTER CHANGING IT ONCE
+      // if (!activeDeviceHaSelector.value || activeDeviceHaSelector.value === "") {
+      //   if (this.activeDeviceId) {
+      //     console.log(`First load, setting activeDeviceHaSelector value to default ${this.activeDeviceId}`);
+      //     try { activeDeviceHaSelector.value = this.activeDeviceId; } catch (_) {}
+      //   }
+      // }
 
       activeDeviceHaSelector.addEventListener('value-changed', (ev) => {
         const val = ev?.detail?.value;
@@ -616,9 +616,9 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         console.warn('Unable to set selector property on ha-selector', err);
       }
 
-      if (this.activeDeviceId) {
-        try { targetDeviceHaSelector.value = this.activeDeviceId; } catch (_) {}
-      }
+      // if (this.activeDeviceId) {
+      //   try { targetDeviceHaSelector.value = this.activeDeviceId; } catch (_) {}
+      // }
 
       targetDeviceHaSelector.addEventListener('value-changed', (ev) => {
         const val = ev?.detail?.value;
