@@ -668,11 +668,16 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         if (val && val !== this.activeDeviceId) {
           console.warn(`Active device for schedule viewing changed to ${val}`);
           this.activeDeviceId = val;
-          // sync native select and checkboxes
-          const sel = this.querySelector('#active-device-selector');
-          if (sel) sel.value = val;
-          const checkbox = this.querySelector(`#active-device-checkboxes input[data-device="${val}"]`);
-          if (checkbox) checkbox.checked = true;
+          // Update target devices to match the active device
+          this.targetDeviceIds = [val];
+          // Update checkboxes to reflect the new target device
+          const targetDeviceContainer = this.querySelector('#target-device-checkboxes');
+          if (targetDeviceContainer) {
+            const cbs = targetDeviceContainer.querySelectorAll('input[type="checkbox"]');
+            cbs.forEach(cb => {
+              cb.checked = cb.value === val;
+            });
+          }
           // reload schedule for new active device
           this.updateContent(this.content, false);
         }
