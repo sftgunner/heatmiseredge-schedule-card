@@ -284,13 +284,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
       this.setAlert(``,"none"); // Clear any existing alerts
     }
     
-    // Update summary at top of page
-    var entityState = this._hass.states[this.climateEntity];
-    var temp = entityState ? entityState.attributes.temperature : 'N/A';
-    var state = this.getEntityState(this.climateEntity, 'unknown');
-    content.querySelector('.entity-id').textContent = this.climateEntity;
-    content.querySelector('.entity-state').textContent = `Current: ${temp}°C (${state})`;
-    content.querySelector('.last-update').textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+    this.updateEntityInfoDisplay();
     // content.querySelector('.entity-mode').textContent = `Current: ${temp}°C (${state})`;
   }
   
@@ -355,6 +349,38 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
     //   );
     // }
   }
+
+  // Render target device info list (name, current temp, schedule mode, operation mode, power)
+  updateEntityInfoDisplay() {
+    const listEl = this.content?.querySelector('.entity-list');
+    if (!listEl || !this._hass) return;
+    listEl.innerHTML = '';
+
+    const devices = (this.targetDeviceIds && this.targetDeviceIds.length > 0)
+      ? this.targetDeviceIds
+      : (this.activeDeviceId ? [this.activeDeviceId] : []);
+
+    devices.forEach(deviceId => {
+      const name = this.findDeviceNameFromId(deviceId) || deviceId;
+      const climate = this.findEntityFromDevice(deviceId, 'climate.', '_thermostat');
+      const tempState = climate ? this._hass.states[climate] : null;
+      const temp = tempState ? tempState.attributes.temperature : 'N/A';
+
+      const scheduleMode = this.getEntityState(this.findEntityFromDevice(deviceId, 'select.', '_schedule_mode'), 'unknown');
+      const operationMode = this.getEntityState(this.findEntityFromDevice(deviceId, 'select.', '_operation_mode'), 'unknown');
+      const devicePower = this.getEntityState(this.findEntityFromDevice(deviceId, 'select.', '_device_power'), 'unknown');
+
+      const row = document.createElement('div');
+      row.className = 'entity-row';
+      row.innerHTML = `${name}: ${temp}°C <small>(Schedule: ${scheduleMode} · Mode: ${operationMode} · Power: ${devicePower})</small>`;
+      listEl.appendChild(row);
+    });
+
+    const lastUpdate = this.content.querySelector('.last-update');
+    if (lastUpdate) {
+      lastUpdate.textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+    }
+  }
   
   render(){
     this.renderFramework(); // Render framework
@@ -404,8 +430,9 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         .actions button.cancel { background-old:#eee; }
         .thermostat-header { margin-bottom: 16px; }
         .entity-info { color: #666; font-size: 14px; margin-top: 4px; }
-        .entity-id { color: #1976d2; margin-bottom: 2px; }
-        .entity-state { font-weight: 500; }
+        .entity-list { display:flex; flex-direction:column; gap:4px; }
+        .entity-row { color:#333; font-weight:500; }
+        .entity-row small { color:#666; font-weight:400; }
          /* Responsive: on small screens put start and temp on their own rows */
          @media (max-width: 480px) {
            .slot-pair { grid-template-columns: 1fr; gap:6px; }
@@ -430,12 +457,13 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
           <label style="display:block; margin-bottom:4px;">Apply schedule to:</label>
           <div id="target-device-checkboxes" class="device-checkboxes"></div>
         </div>
+        <hr style="margin:16px 0 0 0;">
         ` : '' }
         <div class="thermostat-header">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <div class="entity-info">
-              <div class="entity-id"></div>
-              <div class="entity-state">Loading...</div>
+            <b>Selected devices:</b>
+              <div class="entity-list"></div>
               <div class="last-update">Last updated: Never</div>
 
             </div>
@@ -577,6 +605,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
       refreshBtn.addEventListener('click', () => {
         this.readScheduleFromDevice(this.activeDeviceId);
         this.updateScheduleDisplay();
+        this.updateEntityInfoDisplay();
       });
     }
 
@@ -651,6 +680,9 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
               this.setAlert("","none");
               if (DEBUG) console.log(`Target device(s) for schedule application changed to ${selected.join(', ')}`);
             }
+
+            // refresh entity info list to reflect new targets
+            this.updateEntityInfoDisplay();
           };
 
           targetDeviceContainer.addEventListener('change', updateTargetDevices);
