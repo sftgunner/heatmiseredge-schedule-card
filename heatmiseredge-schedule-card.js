@@ -1117,7 +1117,7 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
   // Add this helper function after the constructor
   async writeRegisters(registerStart, values, isLastWrite = true) {
     await this._hass.callService('heatmiser_edge', 'write_register_range', {
-      device_id: [this.activeDeviceId],
+      device: [this.activeDeviceId],
       register: registerStart,
       values: values.join(','),
       refresh_values_after_writing: isLastWrite
