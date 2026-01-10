@@ -914,20 +914,29 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         case 'single':
         // Single day update
         const dayIndex = this.dayOrder.indexOf(day);
-        await this.writeRegisters(this.dayRegisterStartingByte[dayIndex], registerValues);
+        // Write register for each selected target device
+        for (const deviceId of this.targetDeviceIds) {
+          await this.writeRegisters(this.dayRegisterStartingByte[dayIndex], registerValues, deviceId);
+        }
         break;
         
         case 'group':
         // Weekday/Weekend update
         const isWeekend = day === 'saturday' || day === 'sunday';
         if(isWeekend) {
-          // Write to Saturday and Sunday separately
-          await this.writeRegisters(this.dayRegisterStartingByte[5], registerValues, false); // Saturday
-          await this.writeRegisters(this.dayRegisterStartingByte[6], registerValues); // Sunday
+          // Write register for each selected target device
+          for (const deviceId of this.targetDeviceIds) {
+            // Write to Saturday and Sunday separately
+            await this.writeRegisters(this.dayRegisterStartingByte[5], registerValues, deviceId, false); // Saturday
+            await this.writeRegisters(this.dayRegisterStartingByte[6], registerValues, deviceId); // Sunday
+          }
         } else {
           // Write to Monday-Friday in one call
           const weekdayValues = Array(5).fill(registerValues).flat();
-          await this.writeRegisters(this.dayRegisterStartingByte[0], weekdayValues);
+          // Write register for each selected target device
+          for (const deviceId of this.targetDeviceIds) {
+            await this.writeRegisters(this.dayRegisterStartingByte[0], weekdayValues);
+          }
         }
         break;
         
@@ -939,7 +948,10 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         // Then Monday through Saturday (registers 74-217)
         const remainingDaysValues = Array(6).fill(registerValues).flat();
         allDaysValues.push(...remainingDaysValues);
-        await this.writeRegisters(50, allDaysValues);
+        // Write register for each selected target device
+        for (const deviceId of this.targetDeviceIds) {
+          await this.writeRegisters(50, allDaysValues, deviceId);
+        }
         break;
       }
       
@@ -1115,9 +1127,9 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
   }
   
   // Add this helper function after the constructor
-  async writeRegisters(registerStart, values, isLastWrite = true) {
+  async writeRegisters(registerStart, values, device, isLastWrite = true) {
     await this._hass.callService('heatmiser_edge', 'write_register_range', {
-      device: [this.activeDeviceId],
+      device: [device],
       register: registerStart,
       values: values.join(','),
       refresh_values_after_writing: isLastWrite
