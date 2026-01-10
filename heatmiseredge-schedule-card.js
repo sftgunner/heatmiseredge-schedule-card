@@ -787,25 +787,25 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
       // Apply button handlers based on schedule mode
       if (this.scheduleMode === '24 hour') {
         if(applyAllBtn) {
-          applyAllBtn.addEventListener('click', (e) => { e.stopPropagation(); this.applySchedule(day, 'all'); });
+          applyAllBtn.addEventListener('click', (e) => { e.stopPropagation(); this.handleApplyClick(applyAllBtn, day, 'all'); });
         }
       } else if (this.scheduleMode === 'Weekday/Weekend') {
         if(applyGroupBtn) {
-          applyGroupBtn.addEventListener('click', (e) => { e.stopPropagation(); this.applySchedule(day, 'group'); });
+          applyGroupBtn.addEventListener('click', (e) => { e.stopPropagation(); this.handleApplyClick(applyGroupBtn, day, 'group'); });
         }
         if(applyAllBtn) {
-          applyAllBtn.addEventListener('click', (e) => { e.stopPropagation(); this.applySchedule(day, 'all'); });
+          applyAllBtn.addEventListener('click', (e) => { e.stopPropagation(); this.handleApplyClick(applyAllBtn, day, 'all'); });
         }
       } else {
         // 7 Day mode
         if(applyBtn) {
-          applyBtn.addEventListener('click', (e) => { e.stopPropagation(); this.applySchedule(day, 'single'); });
+          applyBtn.addEventListener('click', (e) => { e.stopPropagation(); this.handleApplyClick(applyBtn, day, 'single'); });
         }
         if(applyGroupBtn) {
-          applyGroupBtn.addEventListener('click', (e) => { e.stopPropagation(); this.applySchedule(day, 'group'); });
+          applyGroupBtn.addEventListener('click', (e) => { e.stopPropagation(); this.handleApplyClick(applyGroupBtn, day, 'group'); });
         }
         if(applyAllBtn) {
-          applyAllBtn.addEventListener('click', (e) => { e.stopPropagation(); this.applySchedule(day, 'all'); });
+          applyAllBtn.addEventListener('click', (e) => { e.stopPropagation(); this.handleApplyClick(applyAllBtn, day, 'all'); });
         }
       }
       
@@ -955,8 +955,6 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         break;
       }
       
-      editor.classList.remove('visible');
-      
       // Wait for writes to complete before refreshing
       setTimeout(() => {
         this.readScheduleFromDevice(this.activeDeviceId);
@@ -964,7 +962,35 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
       }, 2000);
     } catch (error) {
       console.error('Error applying schedule:', error);
+      alert('Failed to apply schedule. Please try again.');
     }
+  }
+  
+  handleApplyClick(button, day, type) {
+    // Store original button content and get editor reference
+    const originalContent = button.innerHTML;
+    const editor = this.querySelector(`#${day}-editor`);
+    
+    // Set loading state
+    button.innerHTML = '⏳';
+    button.disabled = true;
+    
+    // Call applySchedule
+    this.applySchedule(day, type).then(() => {
+      // Show success tick
+      button.innerHTML = '✅';
+      
+      // Wait 1 second, then close editor and revert to original content
+      setTimeout(() => {
+        editor.classList.remove('visible');
+        button.innerHTML = originalContent;
+        button.disabled = false;
+      }, 500);
+    }).catch(() => {
+      // On error, revert immediately
+      button.innerHTML = originalContent;
+      button.disabled = false;
+    });
   }
   
   
