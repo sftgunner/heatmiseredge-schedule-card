@@ -414,11 +414,11 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
         .pill { display:inline-flex; align-items:center; gap:4px; padding:4px 8px; border-radius:999px; font-size:12px; line-height:1.2; border:1px solid transparent; }
         .pill.clickable { cursor:pointer; transition:opacity 0.2s; }
         .pill.clickable:hover { opacity:0.8; }
-        .pill-neutral { background:#f2f4f7; color:#333; border-color:#e0e4ea; }
-        .pill-info { background:#e8f4fd; color:#0b6fa4; border-color:#c4e0f5; }
-        .pill-warning { background:#fff4e5; color:#b26a00; border-color:#ffe2b7; }
-        .pill-error { background:#fdecea; color:#b71c1c; border-color:#f9c9c4; }
-        .pill-success { background:#e6f4ea; color:#256029; border-color:#c8e6cf; }
+        .pill-neutral { background:var(--secondary-background-color, #f2f4f7); color:var(--primary-text-color, #333); border-color:var(--divider-color, #e0e4ea); }
+        .pill-info { background:rgba(3, 169, 244, 0.1); color:var(--info-color, #03a9f4); border-color:rgba(3, 169, 244, 0.3); }
+        .pill-warning { background:rgba(255, 152, 0, 0.1); color:var(--warning-color, #ff9800); border-color:rgba(255, 152, 0, 0.3); }
+        .pill-error { background:rgba(244, 67, 54, 0.1); color:var(--error-color, #f44336); border-color:rgba(244, 67, 54, 0.3); }
+        .pill-success { background:rgba(76, 175, 80, 0.1); color:var(--success-color, #4caf50); border-color:rgba(76, 175, 80, 0.3); }
         .day-row { margin: 16px 0; }
         .day-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
         .day-label { font-size:18px; font-weight:bold; }
@@ -696,15 +696,15 @@ class HeatmiserEdgeScheduleCard extends HTMLElement {
             label.appendChild(cb);
             label.appendChild(document.createTextNode(this.findDeviceNameFromId(id) || id));
             label.style.fontSize = '13px';
-            label.style.color = '#333';
+            label.style.color = 'var(--primary-text-color)';
             label.style.display = 'flex';
             label.style.gap = '6px';
             label.style.alignItems = 'center';
             label.style.padding = '6px 10px';
-            label.style.border = '1px solid #d0d0d0';
+            label.style.border = '1px solid var(--divider-color)';
             label.style.borderRadius = '8px';
-            label.style.background = '#fafafa';
-            label.style.boxShadow = 'inset 0 0 0 1px #f5f5f5';
+            label.style.background = 'var(--card-background-color)';
+            label.style.boxShadow = 'inset 0 0 0 1px var(--secondary-background-color)';
             label.style.width = 'fit-content';
             
             // Hide checkbox and label for single device, but keep pills visible
